@@ -1,0 +1,17 @@
+name = "story_bakery/setup_project_configs"
+version = "0.1.0"
+license = "MIT"
+includes = ["pesde.toml", "src/**", "README.md"]
+
+[target]
+environment = "lune"
+
+[target.scripts]
+setup_configs = "src/init.luau"
+
+[indices]
+default = "https://github.com/pesde-pkg/index"
+
+[engines]
+pesde = "^0.7.1"
+lune = "^0.10.4"

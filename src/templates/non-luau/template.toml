@@ -1,0 +1,3 @@
+Name = "non-luau"
+Description = "Template for non-Luau projects."
+Extends = ["base"]

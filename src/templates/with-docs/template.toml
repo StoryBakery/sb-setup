@@ -1,0 +1,3 @@
+Name = "with-docs"
+Description = "Docs workflow additions."
+Extends = ["base"]

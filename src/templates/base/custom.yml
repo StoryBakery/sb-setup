@@ -1,0 +1,5 @@
+base: luau
+
+globals:
+  types:
+    any: true
