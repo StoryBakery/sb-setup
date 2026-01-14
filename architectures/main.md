@@ -75,7 +75,7 @@ Luau 기반 프로젝트와 비-Luau 프로젝트에서 동일한 방식으로 �
 
 ## TOML-구성
 
-- 프로젝트 루트에 `setup_configs.toml`을 둡니다.
+- 프로젝트 루트에 `bakery_project_configs.toml`을 둡니다.
 - `Templates`는 적용할 템플릿 목록이며 왼쪽부터 적용합니다.
 - `base`는 항상 첫 항목으로 둡니다.
 

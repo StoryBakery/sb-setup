@@ -1,7 +1,7 @@
 --> 설정 파일과 서브모듈을 워크스페이스 루트에 설치하는 Lune 스크립트입니다.
 --[[
 	SetupConfigs
-	setup_configs.toml 템플릿 목록을 워크스페이스 루트에 적용합니다.
+	bakery_project_configs.toml 템플릿 목록을 워크스페이스 루트에 적용합니다.
 	bakery-dev-handbook 서브모듈을 libs 경로에 유지합니다.
 ]]
 
@@ -180,17 +180,17 @@ if optionName == "init" then
 	local okInit, initResult = initProjectConfig(Config, FileSystemUtils)
 	if not okInit then
 		if initResult.Code == "WriteProjectConfigFailed" then
-			print(`[Error] Failed to write setup_configs.toml: {initResult.Detail}`)
+			print(`[Error] Failed to write bakery_project_configs.toml: {initResult.Detail}`)
 		else
-			print("[Error] Failed to initialize setup_configs.toml.")
+			print("[Error] Failed to initialize bakery_project_configs.toml.")
 		end
 		Process.exit(1)
 	end
 
 	if initResult.Status == "Created" then
-		print(`[Init] setup_configs.toml created at "{initResult.Path}".`)
+		print(`[Init] bakery_project_configs.toml created at "{initResult.Path}".`)
 	else
-		print(`[Info] setup_configs.toml already exists at "{initResult.Path}".`)
+		print(`[Info] bakery_project_configs.toml already exists at "{initResult.Path}".`)
 	end
 	Process.exit(0)
 end
@@ -199,18 +199,18 @@ local okInstall, installResult = Installer.Install(Config, FileSystemUtils, Toml
 if not okInstall then
 	if installResult.Code == "MissingSourceRoot" then
 		print("[Error] Failed to locate setup_configs source root.")
-	elseif installResult.Code == "MissingProjectConfig" then
-		print(`[Error] Missing setup_configs.toml at "{installResult.Path}".`)
-	elseif installResult.Code == "ProjectConfigParseFailed" then
-		print(`[Error] Failed to parse setup_configs.toml at line {installResult.Line}.`)
-	elseif installResult.Code == "ProjectConfigReadFailed" then
-		print(`[Error] Failed to read setup_configs.toml: {installResult.Detail}`)
-	elseif installResult.Code == "MissingTemplates" then
-		print("[Error] Templates list is empty in setup_configs.toml.")
-	elseif installResult.Code == "InvalidTemplateEntry" then
-		print(`[Error] Invalid template entry at index {installResult.Index} in setup_configs.toml.`)
-	elseif installResult.Code == "InvalidTemplateSource" then
-		print(`[Error] Invalid template source at index {installResult.Index} in setup_configs.toml.`)
+elseif installResult.Code == "MissingProjectConfig" then
+	print(`[Error] Missing bakery_project_configs.toml at "{installResult.Path}".`)
+elseif installResult.Code == "ProjectConfigParseFailed" then
+	print(`[Error] Failed to parse bakery_project_configs.toml at line {installResult.Line}.`)
+elseif installResult.Code == "ProjectConfigReadFailed" then
+	print(`[Error] Failed to read bakery_project_configs.toml: {installResult.Detail}`)
+elseif installResult.Code == "MissingTemplates" then
+	print("[Error] Templates list is empty in bakery_project_configs.toml.")
+elseif installResult.Code == "InvalidTemplateEntry" then
+	print(`[Error] Invalid template entry at index {installResult.Index} in bakery_project_configs.toml.`)
+elseif installResult.Code == "InvalidTemplateSource" then
+	print(`[Error] Invalid template source at index {installResult.Index} in bakery_project_configs.toml.`)
 	elseif installResult.Code == "InvalidTemplateOrder" then
 		print(`[Error] Templates must start with "{installResult.BaseTemplateName}".`)
 	elseif installResult.Code == "MissingTemplateSource" then

@@ -5,9 +5,7 @@ includes = ["pesde.toml", "src/**", "README.md"]
 
 [target]
 environment = "lune"
-
-[target.scripts]
-setup_configs = "src/init.luau"
+bin = "src/init.luau"
 
 [indices]
 default = "https://github.com/pesde-pkg/index"

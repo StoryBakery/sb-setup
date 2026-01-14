@@ -6,7 +6,7 @@ local Config = {
 	BaseTemplateName = "base",
 	TemplatesRootName = "templates",
 	ProjectTemplatesRootPath = "setup_configs/templates",
-	ProjectConfigFileName = "setup_configs.toml",
+	ProjectConfigFileName = "bakery_project_configs.toml",
 	TemplateConfigFileName = "template.toml",
 	SourceCandidates = {
 		"pkgs/setup_configs/src",
