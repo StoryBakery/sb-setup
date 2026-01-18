@@ -30,6 +30,15 @@ local function resolveSourceRoot(
 	return nil
 end
 
+local function resolveProjectTemplatesRoot(candidates: { string }): string?
+	for _, candidate in candidates do
+		if candidate ~= "" and FileSystem.isDir(candidate) then
+			return candidate
+		end
+	end
+	return nil
+end
+
 local function listTemplateNames(templateRoots: { string }, fileSystemUtils): { string }
 	local templateNameSet: { [string]: boolean } = {}
 	for _, templatesRoot in templateRoots do
@@ -63,8 +72,9 @@ local function collectTemplateOptions(config, fileSystemUtils): { string }
 		table.insert(roots, fileSystemUtils.JoinPath(srcRoot, config.TemplatesRootName))
 	end
 
-	if FileSystem.isDir(config.ProjectTemplatesRootPath) then
-		table.insert(roots, config.ProjectTemplatesRootPath)
+	local projectTemplatesRoot = resolveProjectTemplatesRoot(config.ProjectTemplatesRootCandidates)
+	if projectTemplatesRoot ~= nil then
+		table.insert(roots, projectTemplatesRoot)
 	end
 
 	return listTemplateNames(roots, fileSystemUtils)

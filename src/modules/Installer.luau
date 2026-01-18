@@ -90,6 +90,15 @@ local function resolveSourceRoot(
 	return nil
 end
 
+local function resolveProjectTemplatesRoot(candidates: { string }): string?
+	for _, candidate in candidates do
+		if candidate ~= "" and FileSystem.isDir(candidate) then
+			return candidate
+		end
+	end
+	return nil
+end
+
 local function readProjectConfig(configPath: string, tomlParser)
 	local okRead, result = tomlParser.ReadFile(configPath)
 	if not okRead then
@@ -484,10 +493,7 @@ local function applyTemplate(
 		local templateInfo = managedBlock.ParseTemplate(templateContent)
 		local destinationPath = item.RelativePath
 
-		if not templateInfo.HasBlocks then
-			fileSystemUtils.CopyFile(item.SourcePath, destinationPath)
-			appliedCount += 1
-		elseif not FileSystem.isFile(destinationPath) then
+		if not templateInfo.HasBlocks or not FileSystem.isFile(destinationPath) then
 			fileSystemUtils.CopyFile(item.SourcePath, destinationPath)
 			appliedCount += 1
 		else
@@ -534,8 +540,8 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 		packageTemplatesRoot = fileSystemUtils.JoinPath(srcRoot, config.TemplatesRootName)
 	end
 
-	local projectTemplatesRoot = config.ProjectTemplatesRootPath
-	local hasProjectTemplatesRoot = FileSystem.isDir(projectTemplatesRoot)
+	local projectTemplatesRoot = resolveProjectTemplatesRoot(config.ProjectTemplatesRootCandidates)
+	local hasProjectTemplatesRoot = projectTemplatesRoot ~= nil
 
 	local hasCustomSource = false
 	for _, ref in requestedTemplates do
