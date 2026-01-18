@@ -1,5 +1,5 @@
 --[[
-	템플릿 설정과 소스 경로, 서브모듈 정보를 관리하는 모듈입니다.
+	템플릿 설정과 소스 경로, 템플릿 서브모듈 파일 이름을 관리하는 모듈입니다.
 ]]
 
 local Config = {
@@ -8,14 +8,11 @@ local Config = {
 	ProjectTemplatesRootPath = "setup_configs/templates",
 	ProjectConfigFileName = "bakery_project_configs.toml",
 	TemplateConfigFileName = "template.toml",
+	TemplateSubmoduleFileName = "template.gitmodules",
 	SourceCandidates = {
 		"pkgs/setup_configs/src",
 		".pesde/setup_configs/src",
 		"src",
-	},
-	Submodule = {
-		Path = "libs/bakery-dev-handbook",
-		Url = "https://github.com/StoryBakery/bakery-dev-handbook",
 	},
 }
 

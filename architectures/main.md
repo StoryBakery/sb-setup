@@ -11,6 +11,7 @@ Luau 기반 프로젝트와 비-Luau 프로젝트에서 동일한 방식으로 �
 - 사용자 커스텀 템플릿은 프로젝트 루트의 `setup_configs/templates/`에 추가할 수 있어야 합니다.
 - 템플릿 탐색은 프로젝트 루트를 먼저 확인하고 없으면 패키지 템플릿을 사용합니다.
 - 각 템플릿 폴더는 `template.toml`을 포함해야 합니다.
+- 필요하면 템플릿 폴더에 `template.gitmodules`를 둡니다.
 - 공통 베이스 템플릿 이름은 `base`로 고정합니다.
 - `AGENTS.md`는 `base` 템플릿이 소유하고 다른 템플릿은 상속으로 확장합니다.
 
@@ -19,6 +20,7 @@ Luau 기반 프로젝트와 비-Luau 프로젝트에서 동일한 방식으로 �
 - `base` 템플릿을 공통 베이스로 둡니다.
 - `non-luau` 템플릿은 비-Luau 프로젝트 구성을 제공합니다.
 - `roblox-place` 템플릿은 Roblox place 구성을 제공합니다.
+- `with-bakery-dev-handbook` 템플릿은 bakery-dev-handbook 서브모듈 구성을 제공합니다.
 
 ## 상속-규칙
 
@@ -104,6 +106,19 @@ Source = "setup_configs/templates/custom"
 Name = "roblox-place"
 Description = "Roblox place 템플릿입니다."
 Extends = ["base", "non-luau"]
+```
+
+## 템플릿-서브모듈
+
+- 템플릿 폴더에 `template.gitmodules`가 있으면 서브모듈 목록을 정의합니다.
+- 형식은 `.gitmodules`와 동일하며 `path`, `url`을 지정합니다.
+- `path`는 프로젝트 루트를 기준으로 해석합니다.
+- 동일한 `path`를 여러 템플릿에서 정의하면 오류로 처리합니다.
+
+```text
+[submodule "bakery-dev-handbook"]
+	path = libs/bakery-dev-handbook
+	url = https://github.com/StoryBakery/bakery-dev-handbook
 ```
 
 ## 비주석-포맷

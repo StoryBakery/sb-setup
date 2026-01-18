@@ -1,0 +1,3 @@
+Name = "with-bakery-dev-handbook"
+Description = "Bakery dev handbook submodule."
+Extends = ["base"]
