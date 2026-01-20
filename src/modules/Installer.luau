@@ -4,6 +4,8 @@
 
 local FileSystem = require("@lune/fs")
 
+local TemplateRoots = require("@self/modules/TemplateRoots")
+
 local function trim(value: string): string
 	return value:match("^%s*(.-)%s*$")
 end
@@ -49,187 +51,6 @@ local function stripQuotes(value: string): string
 		return quoted
 	end
 	return value
-end
-
-local function listTemplateNames(templateRoots: { string }, fileSystemUtils): { string }
-	local templateNameSet: { [string]: boolean } = {}
-	for _, templatesRoot in templateRoots do
-		if templatesRoot ~= "" and FileSystem.isDir(templatesRoot) then
-			local ok, entries = pcall(FileSystem.readDir, templatesRoot)
-			if ok and entries ~= nil then
-				for _, entry in entries do
-					local path = fileSystemUtils.JoinPath(templatesRoot, entry)
-					if FileSystem.isDir(path) then
-						templateNameSet[entry] = true
-					end
-				end
-			end
-		end
-	end
-
-	local templateNames: { string } = {}
-	for name in templateNameSet do
-		table.insert(templateNames, name)
-	end
-
-	table.sort(templateNames)
-	return templateNames
-end
-
-local function normalizeSourcePath(source: string): string
-	if source:sub(1, 1) == "@" then
-		return source:sub(2)
-	end
-	return source
-end
-
-local function resolveConfigRoot(configPath: string, fileSystemUtils): string
-	local configDir = fileSystemUtils.GetDirectoryName(configPath)
-	if configDir == "" then
-		return "."
-	end
-	return configDir
-end
-
-local function isAbsolutePath(path: string): boolean
-	if path:sub(1, 1) == "/" then
-		return true
-	end
-	if path:match("^[A-Za-z]:[\\/]") then
-		return true
-	end
-	return false
-end
-
-local function resolvePathFromConfig(
-	path: string,
-	configRoot: string,
-	fileSystemUtils
-): string
-	if isAbsolutePath(path) then
-		return path
-	end
-	return fileSystemUtils.JoinPath(configRoot, path)
-end
-
-local function findTemplatesRoot(
-	startDir: string,
-	templatesRootName: string,
-	fileSystemUtils
-): string?
-	local current = startDir
-	while current ~= "" do
-		local candidate = fileSystemUtils.JoinPath(current, templatesRootName)
-		if FileSystem.isDir(candidate) then
-			return candidate
-		end
-		local parent = fileSystemUtils.GetDirectoryName(current)
-		if parent == "" or parent == current then
-			break
-		end
-		current = parent
-	end
-	return nil
-end
-
-local function resolveTemplatesRootFromBase(
-	baseDir: string,
-	templatesRootName: string,
-	fileSystemUtils
-): string?
-	if baseDir == "" then
-		return nil
-	end
-
-	local direct = fileSystemUtils.JoinPath(baseDir, templatesRootName)
-	if FileSystem.isDir(direct) then
-		return direct
-	end
-
-	local srcRoot = fileSystemUtils.JoinPath(baseDir, "src")
-	local srcTemplates = fileSystemUtils.JoinPath(srcRoot, templatesRootName)
-	if FileSystem.isDir(srcTemplates) then
-		return srcTemplates
-	end
-
-	return nil
-end
-
-local function findTemplatesRootInPackages(
-	parentDir: string,
-	templatesRootName: string,
-	fileSystemUtils
-): string?
-	if parentDir == "" or not FileSystem.isDir(parentDir) then
-		return nil
-	end
-
-	local ok, entries = pcall(FileSystem.readDir, parentDir)
-	if not ok or entries == nil then
-		return nil
-	end
-
-	table.sort(entries)
-
-	for _, entry in entries do
-		local entryPath = fileSystemUtils.JoinPath(parentDir, entry)
-		if FileSystem.isDir(entryPath) then
-			local resolved =
-				resolveTemplatesRootFromBase(entryPath, templatesRootName, fileSystemUtils)
-			if resolved ~= nil then
-				return resolved
-			end
-		end
-	end
-
-	return nil
-end
-
-local function resolvePackageTemplatesRoot(
-	templatesRootName: string,
-	configRoot: string,
-	fileSystemUtils
-): string?
-	local source = debug.info(1, "s")
-	if source ~= nil and source ~= "" then
-		local scriptPath = normalizeSourcePath(source)
-		local scriptDir = fileSystemUtils.GetDirectoryName(scriptPath)
-		if scriptDir ~= "" then
-			local fromScript = findTemplatesRoot(scriptDir, templatesRootName, fileSystemUtils)
-			if fromScript ~= nil then
-				return fromScript
-			end
-		end
-	end
-
-	local fromConfig = resolveTemplatesRootFromBase(
-		configRoot,
-		templatesRootName,
-		fileSystemUtils
-	)
-	if fromConfig ~= nil then
-		return fromConfig
-	end
-
-	local fromPesde = findTemplatesRootInPackages(
-		fileSystemUtils.JoinPath(configRoot, ".pesde"),
-		templatesRootName,
-		fileSystemUtils
-	)
-	if fromPesde ~= nil then
-		return fromPesde
-	end
-
-	local fromPkgs = findTemplatesRootInPackages(
-		fileSystemUtils.JoinPath(configRoot, "pkgs"),
-		templatesRootName,
-		fileSystemUtils
-	)
-	if fromPkgs ~= nil then
-		return fromPkgs
-	end
-
-	return nil
 end
 
 local function readProjectConfig(configPath: string, tomlParser)
@@ -306,7 +127,7 @@ local function loadTemplateConfig(
 )
 	local templateRoot = nil
 	if sourcePath ~= nil then
-		local resolvedSourcePath = resolvePathFromConfig(
+		local resolvedSourcePath = TemplateRoots.ResolvePathFromConfig(
 			sourcePath,
 			configRoot,
 			fileSystemUtils
@@ -344,7 +165,7 @@ local function loadTemplateConfig(
 		if packageTemplatesRoot ~= nil then
 			table.insert(roots, packageTemplatesRoot)
 		end
-		local availableTemplates = listTemplateNames(roots, fileSystemUtils)
+		local availableTemplates = TemplateRoots.ListTemplateNames(roots, fileSystemUtils)
 		return false, {
 			Code = "MissingTemplate",
 			TemplateName = templateName,
@@ -658,7 +479,7 @@ end
 
 local function install(config, fileSystemUtils, tomlParser, managedBlock)
 	local projectConfigPath = config.ProjectConfigFileName
-	local configRoot = resolveConfigRoot(projectConfigPath, fileSystemUtils)
+	local configRoot = TemplateRoots.ResolveConfigRoot(projectConfigPath, fileSystemUtils)
 	local okProject, projectResult = readProjectConfig(projectConfigPath, tomlParser)
 	if not okProject then
 		return false, projectResult
@@ -672,11 +493,15 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 		}
 	end
 
-	local packageTemplatesRoot =
-		resolvePackageTemplatesRoot(config.TemplatesRootName, configRoot, fileSystemUtils)
-	local projectTemplatesRoot = fileSystemUtils.JoinPath(
+	local packageTemplatesRoot = TemplateRoots.ResolvePackageTemplatesRoot(
+		config.TemplatesRootName,
 		configRoot,
-		config.TemplatesRootName
+		fileSystemUtils
+	)
+	local projectTemplatesRoot = TemplateRoots.ResolveProjectTemplatesRoot(
+		configRoot,
+		config.TemplatesRootName,
+		fileSystemUtils
 	)
 	local hasProjectTemplatesRoot = FileSystem.isDir(projectTemplatesRoot)
 
