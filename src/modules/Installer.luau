@@ -132,17 +132,104 @@ local function findTemplatesRoot(
 	return nil
 end
 
-local function resolvePackageTemplatesRoot(templatesRootName: string, fileSystemUtils): string?
+local function resolveTemplatesRootFromBase(
+	baseDir: string,
+	templatesRootName: string,
+	fileSystemUtils
+): string?
+	if baseDir == "" then
+		return nil
+	end
+
+	local direct = fileSystemUtils.JoinPath(baseDir, templatesRootName)
+	if FileSystem.isDir(direct) then
+		return direct
+	end
+
+	local srcRoot = fileSystemUtils.JoinPath(baseDir, "src")
+	local srcTemplates = fileSystemUtils.JoinPath(srcRoot, templatesRootName)
+	if FileSystem.isDir(srcTemplates) then
+		return srcTemplates
+	end
+
+	return nil
+end
+
+local function findTemplatesRootInPackages(
+	parentDir: string,
+	templatesRootName: string,
+	fileSystemUtils
+): string?
+	if parentDir == "" or not FileSystem.isDir(parentDir) then
+		return nil
+	end
+
+	local ok, entries = pcall(FileSystem.readDir, parentDir)
+	if not ok or entries == nil then
+		return nil
+	end
+
+	table.sort(entries)
+
+	for _, entry in entries do
+		local entryPath = fileSystemUtils.JoinPath(parentDir, entry)
+		if FileSystem.isDir(entryPath) then
+			local resolved =
+				resolveTemplatesRootFromBase(entryPath, templatesRootName, fileSystemUtils)
+			if resolved ~= nil then
+				return resolved
+			end
+		end
+	end
+
+	return nil
+end
+
+local function resolvePackageTemplatesRoot(
+	templatesRootName: string,
+	configRoot: string,
+	fileSystemUtils
+): string?
 	local source = debug.info(1, "s")
-	if source == nil or source == "" then
-		return nil
+	if source ~= nil and source ~= "" then
+		local scriptPath = normalizeSourcePath(source)
+		local scriptDir = fileSystemUtils.GetDirectoryName(scriptPath)
+		if scriptDir ~= "" then
+			local fromScript = findTemplatesRoot(scriptDir, templatesRootName, fileSystemUtils)
+			if fromScript ~= nil then
+				return fromScript
+			end
+		end
 	end
-	local scriptPath = normalizeSourcePath(source)
-	local scriptDir = fileSystemUtils.GetDirectoryName(scriptPath)
-	if scriptDir == "" then
-		return nil
+
+	local fromConfig = resolveTemplatesRootFromBase(
+		configRoot,
+		templatesRootName,
+		fileSystemUtils
+	)
+	if fromConfig ~= nil then
+		return fromConfig
 	end
-	return findTemplatesRoot(scriptDir, templatesRootName, fileSystemUtils)
+
+	local fromPesde = findTemplatesRootInPackages(
+		fileSystemUtils.JoinPath(configRoot, ".pesde"),
+		templatesRootName,
+		fileSystemUtils
+	)
+	if fromPesde ~= nil then
+		return fromPesde
+	end
+
+	local fromPkgs = findTemplatesRootInPackages(
+		fileSystemUtils.JoinPath(configRoot, "pkgs"),
+		templatesRootName,
+		fileSystemUtils
+	)
+	if fromPkgs ~= nil then
+		return fromPkgs
+	end
+
+	return nil
 end
 
 local function readProjectConfig(configPath: string, tomlParser)
@@ -178,30 +265,30 @@ local function readProjectConfig(configPath: string, tomlParser)
 	if firstType == "string" then
 		for index, name in templates do
 			if type(name) ~= "string" or name == "" then
-				return false, { Code = "InvalidTemplateEntry", Index = index }
+				return false, { Code = "InvalidTemplateEntry", Index = index, Path = configPath }
 			end
 			table.insert(templateRefs, { Name = name })
 		end
 	elseif firstType == "table" then
 		for index, entry in templates do
 			if type(entry) ~= "table" then
-				return false, { Code = "InvalidTemplateEntry", Index = index }
+				return false, { Code = "InvalidTemplateEntry", Index = index, Path = configPath }
 			end
 
 			local name = entry.Name
 			if type(name) ~= "string" or name == "" then
-				return false, { Code = "InvalidTemplateEntry", Index = index }
+				return false, { Code = "InvalidTemplateEntry", Index = index, Path = configPath }
 			end
 
 			local source = entry.Source
 			if source ~= nil and (type(source) ~= "string" or source == "") then
-				return false, { Code = "InvalidTemplateSource", Index = index }
+				return false, { Code = "InvalidTemplateSource", Index = index, Path = configPath }
 			end
 
 			table.insert(templateRefs, { Name = name, Source = source })
 		end
 	else
-		return false, { Code = "InvalidTemplateEntry", Index = 1 }
+		return false, { Code = "InvalidTemplateEntry", Index = 1, Path = configPath }
 	end
 
 	return true, { Templates = templateRefs }
@@ -262,6 +349,7 @@ local function loadTemplateConfig(
 			Code = "MissingTemplate",
 			TemplateName = templateName,
 			AvailableTemplates = availableTemplates,
+			TemplateRoots = roots,
 		}
 	end
 
@@ -585,24 +673,12 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 	end
 
 	local packageTemplatesRoot =
-		resolvePackageTemplatesRoot(config.TemplatesRootName, fileSystemUtils)
+		resolvePackageTemplatesRoot(config.TemplatesRootName, configRoot, fileSystemUtils)
 	local projectTemplatesRoot = fileSystemUtils.JoinPath(
 		configRoot,
 		config.TemplatesRootName
 	)
 	local hasProjectTemplatesRoot = FileSystem.isDir(projectTemplatesRoot)
-
-	local hasCustomSource = false
-	for _, ref in requestedTemplates do
-		if ref.Source ~= nil then
-			hasCustomSource = true
-			break
-		end
-	end
-
-	if not packageTemplatesRoot and not hasProjectTemplatesRoot and not hasCustomSource then
-		return false, { Code = "MissingSourceRoot" }
-	end
 
 	local okResolved, resolvedResult = resolveTemplates(
 		requestedTemplates,

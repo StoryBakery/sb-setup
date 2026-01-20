@@ -299,72 +299,119 @@ if optionName == "init" then
 	Process.exit(0)
 end
 
-local okInstall, installResult =
-	Installer.Install(Config, FileSystemUtils, TomlParser, ManagedBlock)
-if not okInstall then
-	if installResult.Code == "MissingSourceRoot" then
-		print("[Error] Failed to locate template sources.")
-	elseif installResult.Code == "MissingProjectConfig" then
-		print(`[Error] Missing bakery_project_configs.toml at "{installResult.Path}".`)
-	elseif installResult.Code == "ProjectConfigParseFailed" then
-		print(`[Error] Failed to parse bakery_project_configs.toml at line {installResult.Line}.`)
-	elseif installResult.Code == "ProjectConfigReadFailed" then
-		print(`[Error] Failed to read bakery_project_configs.toml: {installResult.Detail}`)
-	elseif installResult.Code == "MissingTemplates" then
-		print("[Error] Templates list is empty in bakery_project_configs.toml.")
-	elseif installResult.Code == "InvalidTemplateEntry" then
+local INSTALL_ERROR_HANDLERS = {
+	MissingProjectConfig = function(err)
+		print(`[Error] Missing bakery_project_configs.toml at "{err.Path}".`)
+	end,
+	ProjectConfigParseFailed = function(err)
+		local pathLabel = err.Path or "bakery_project_configs.toml"
+		print(`[Error] Failed to parse "{pathLabel}" at line {err.Line}.`)
+	end,
+	ProjectConfigReadFailed = function(err)
+		local detail = err.Detail or ""
+		print(`[Error] Failed to read bakery_project_configs.toml: {detail}`)
+	end,
+	MissingTemplates = function(err)
+		local pathLabel = err.Path or "bakery_project_configs.toml"
+		print(`[Error] Templates list is empty in "{pathLabel}".`)
+	end,
+	InvalidTemplateEntry = function(err)
+		local pathLabel = err.Path or "bakery_project_configs.toml"
+		print(`[Error] Invalid template entry at index {err.Index} in "{pathLabel}".`)
+	end,
+	InvalidTemplateSource = function(err)
+		local pathLabel = err.Path or "bakery_project_configs.toml"
+		print(`[Error] Invalid template source at index {err.Index} in "{pathLabel}".`)
+	end,
+	InvalidTemplateOrder = function(err)
+		print(`[Error] Templates must start with "{err.BaseTemplateName}".`)
+	end,
+	MissingTemplateSource = function(err)
 		print(
-			`[Error] Invalid template entry at index {installResult.Index} in bakery_project_configs.toml.`
+			`[Error] Template source not found for "{err.TemplateName}": {err.Source}`
 		)
-	elseif installResult.Code == "InvalidTemplateSource" then
-		print(
-			`[Error] Invalid template source at index {installResult.Index} in bakery_project_configs.toml.`
-		)
-	elseif installResult.Code == "InvalidTemplateOrder" then
-		print(`[Error] Templates must start with "{installResult.BaseTemplateName}".`)
-	elseif installResult.Code == "MissingTemplateSource" then
-		print(
-			`[Error] Template source not found for "{installResult.TemplateName}": {installResult.Source}`
-		)
-	elseif installResult.Code == "DuplicateTemplateSource" then
-		print(`[Error] Template "{installResult.TemplateName}" has multiple sources.`)
-	elseif installResult.Code == "MissingTemplate" then
-		print(`[Error] Failed to find template "{installResult.TemplateName}".`)
-		local availableTemplates = installResult.AvailableTemplates or {}
+	end,
+	DuplicateTemplateSource = function(err)
+		print(`[Error] Template "{err.TemplateName}" has multiple sources.`)
+	end,
+	MissingTemplate = function(err)
+		print(`[Error] Failed to find template "{err.TemplateName}".`)
+		local availableTemplates = err.AvailableTemplates or {}
 		if #availableTemplates > 0 then
 			print(`[Info] Available templates: {table.concat(availableTemplates, ", ")}`)
 		end
-	elseif installResult.Code == "MissingTemplateConfig" then
-		print(`[Error] Missing template.toml at "{installResult.Path}".`)
-	elseif installResult.Code == "TemplateConfigParseFailed" then
-		print(`[Error] Failed to parse template.toml at line {installResult.Line}.`)
-	elseif installResult.Code == "TemplateConfigReadFailed" then
-		print(`[Error] Failed to read template.toml: {installResult.Detail}`)
-	elseif installResult.Code == "MissingTemplateName" then
-		print(`[Error] Missing Name in template.toml at "{installResult.Path}".`)
-	elseif installResult.Code == "TemplateNameMismatch" then
+		local templateRoots = err.TemplateRoots or {}
+		if #templateRoots > 0 then
+			print(`[Info] Template roots: {table.concat(templateRoots, ", ")}`)
+		end
+	end,
+	MissingTemplateConfig = function(err)
+		print(`[Error] Missing template.toml at "{err.Path}".`)
+	end,
+	TemplateConfigParseFailed = function(err)
+		print(`[Error] Failed to parse template.toml at line {err.Line}.`)
+	end,
+	TemplateConfigReadFailed = function(err)
+		print(`[Error] Failed to read template.toml: {err.Detail}`)
+	end,
+	MissingTemplateName = function(err)
+		print(`[Error] Missing Name in template.toml at "{err.Path}".`)
+	end,
+	TemplateNameMismatch = function(err)
 		print(
-			`[Error] Template name mismatch for "{installResult.TemplateName}" (found "{installResult.ConfigName}").`
+			`[Error] Template name mismatch for "{err.TemplateName}" (found "{err.ConfigName}").`
 		)
-	elseif installResult.Code == "ReadTemplateFailed" then
-		print(`[Error] Failed to read template file "{installResult.Path}".`)
-	elseif installResult.Code == "ReadDestinationFailed" then
-		print(`[Error] Failed to read destination file "{installResult.Path}".`)
-	elseif installResult.Code == "WriteDestinationFailed" then
-		print(`[Error] Failed to write destination file "{installResult.Path}".`)
-	elseif installResult.Code == "TemplateSubmoduleReadFailed" then
-		print(`[Error] Failed to read template gitmodules file "{installResult.Path}".`)
-	elseif installResult.Code == "TemplateSubmoduleParseFailed" then
-		local lineLabel = installResult.Line or "unknown"
-		print(`[Error] Failed to parse template gitmodules file "{installResult.Path}" at line {lineLabel}.`)
-	elseif installResult.Code == "InvalidTemplateSubmodule" then
-		local nameLabel = installResult.SubmoduleName or "unknown"
-		print(`[Error] Invalid template gitmodules entry "{nameLabel}" in "{installResult.Path}".`)
-	elseif installResult.Code == "DuplicateSubmodulePath" then
-		print(`[Error] Duplicate submodule path "{installResult.Path}" in templates.`)
-	else
-		print("[Error] Config install failed.")
+	end,
+	ReadTemplateFailed = function(err)
+		print(`[Error] Failed to read template file "{err.Path}".`)
+	end,
+	ReadDestinationFailed = function(err)
+		print(`[Error] Failed to read destination file "{err.Path}".`)
+	end,
+	WriteDestinationFailed = function(err)
+		print(`[Error] Failed to write destination file "{err.Path}".`)
+	end,
+	TemplateSubmoduleReadFailed = function(err)
+		print(`[Error] Failed to read template gitmodules file "{err.Path}".`)
+	end,
+	TemplateSubmoduleParseFailed = function(err)
+		local lineLabel = err.Line or "unknown"
+		local lineText = err.LineText
+		local pathLabel = err.Path or "template.gitmodules"
+		if lineText ~= nil and lineText ~= "" then
+			print(
+				`[Error] Failed to parse template gitmodules file "{pathLabel}" at line {lineLabel}: {lineText}`
+			)
+		else
+			print(
+				`[Error] Failed to parse template gitmodules file "{pathLabel}" at line {lineLabel}.`
+			)
+		end
+	end,
+	InvalidTemplateSubmodule = function(err)
+		local nameLabel = err.SubmoduleName or "unknown"
+		print(`[Error] Invalid template gitmodules entry "{nameLabel}" in "{err.Path}".`)
+	end,
+	DuplicateSubmodulePath = function(err)
+		print(`[Error] Duplicate submodule path "{err.Path}" in templates.`)
+	end,
+}
+
+local function printInstallError(installError)
+	local handler = INSTALL_ERROR_HANDLERS[installError.Code]
+	if handler ~= nil then
+		handler(installError)
+		return
 	end
+
+	local codeLabel = installError.Code or "Unknown"
+	print(`[Error] Config install failed ({codeLabel}).`)
+end
+
+local okInstall, installResult =
+	Installer.Install(Config, FileSystemUtils, TomlParser, ManagedBlock)
+if not okInstall then
+	printInstallError(installResult)
 	Process.exit(1)
 end
 
@@ -382,7 +429,9 @@ for _, submodule in submodules do
 
 	if not submoduleResult.IsOk then
 		if submoduleResult.Status == "PathConflict" then
-			print(`[Error] Path "{submodulePath}" already exists and cannot be used for a submodule.`)
+			print(
+				`[Error] Path "{submodulePath}" already exists and cannot be used for a submodule.`
+			)
 		elseif submoduleResult.Status == "NotGitRepo" then
 			print(`[Error] Path "{submodulePath}" is not a Git repository.`)
 		elseif submoduleResult.Status == "GitFailed" then
