@@ -60,27 +60,61 @@ local function parseArgs(args: { string })
 	}
 end
 
-local function resolveSourceRoot(
-	candidates: { string },
+local function normalizeSourcePath(source: string): string
+	if source:sub(1, 1) == "@" then
+		return source:sub(2)
+	end
+	return source
+end
+
+local function resolveConfigRoot(configPath: string, fileSystemUtils): string
+	local configDir = fileSystemUtils.GetDirectoryName(configPath)
+	if configDir == "" then
+		return "."
+	end
+	return configDir
+end
+
+local function findTemplatesRoot(
+	startDir: string,
 	templatesRootName: string,
 	fileSystemUtils
 ): string?
-	for _, candidate in candidates do
-		local templatesRoot = fileSystemUtils.JoinPath(candidate, templatesRootName)
-		if FileSystem.isDir(templatesRoot) then
+	local current = startDir
+	while current ~= "" do
+		local candidate = fileSystemUtils.JoinPath(current, templatesRootName)
+		if FileSystem.isDir(candidate) then
 			return candidate
 		end
+		local parent = fileSystemUtils.GetDirectoryName(current)
+		if parent == "" or parent == current then
+			break
+		end
+		current = parent
 	end
 	return nil
 end
 
-local function resolveProjectTemplatesRoot(candidates: { string }): string?
-	for _, candidate in candidates do
-		if candidate ~= "" and FileSystem.isDir(candidate) then
-			return candidate
-		end
+local function resolvePackageTemplatesRoot(templatesRootName: string, fileSystemUtils): string?
+	local source = debug.info(1, "s")
+	if source == nil or source == "" then
+		return nil
 	end
-	return nil
+	local scriptPath = normalizeSourcePath(source)
+	local scriptDir = fileSystemUtils.GetDirectoryName(scriptPath)
+	if scriptDir == "" then
+		return nil
+	end
+	return findTemplatesRoot(scriptDir, templatesRootName, fileSystemUtils)
+end
+
+local function resolveProjectTemplatesRoot(
+	configPath: string,
+	templatesRootName: string,
+	fileSystemUtils
+): string
+	local configRoot = resolveConfigRoot(configPath, fileSystemUtils)
+	return fileSystemUtils.JoinPath(configRoot, templatesRootName)
 end
 
 local function listTemplateNames(templateRoots: { string }, fileSystemUtils): { string }
@@ -110,14 +144,19 @@ end
 
 local function collectTemplateOptions(config, fileSystemUtils): { string }
 	local roots: { string } = {}
-	local srcRoot =
-		resolveSourceRoot(config.SourceCandidates, config.TemplatesRootName, fileSystemUtils)
-	if srcRoot ~= nil then
-		table.insert(roots, fileSystemUtils.JoinPath(srcRoot, config.TemplatesRootName))
+
+	local packageTemplatesRoot =
+		resolvePackageTemplatesRoot(config.TemplatesRootName, fileSystemUtils)
+	if packageTemplatesRoot ~= nil then
+		table.insert(roots, packageTemplatesRoot)
 	end
 
-	local projectTemplatesRoot = resolveProjectTemplatesRoot(config.ProjectTemplatesRootCandidates)
-	if projectTemplatesRoot ~= nil then
+	local projectTemplatesRoot = resolveProjectTemplatesRoot(
+		config.ProjectConfigFileName,
+		config.TemplatesRootName,
+		fileSystemUtils
+	)
+	if FileSystem.isDir(projectTemplatesRoot) then
 		table.insert(roots, projectTemplatesRoot)
 	end
 
@@ -264,7 +303,7 @@ local okInstall, installResult =
 	Installer.Install(Config, FileSystemUtils, TomlParser, ManagedBlock)
 if not okInstall then
 	if installResult.Code == "MissingSourceRoot" then
-		print("[Error] Failed to locate setup_configs source root.")
+		print("[Error] Failed to locate template sources.")
 	elseif installResult.Code == "MissingProjectConfig" then
 		print(`[Error] Missing bakery_project_configs.toml at "{installResult.Path}".`)
 	elseif installResult.Code == "ProjectConfigParseFailed" then
