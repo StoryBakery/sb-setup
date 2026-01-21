@@ -38,3 +38,5 @@ wally.lock
 
 /node_modules
 /build
+# Tests
+/tests/.tmp

@@ -8,6 +8,8 @@ local Config = {
 	ProjectConfigFileName = "bakery_project_configs.toml",
 	TemplateConfigFileName = "template.toml",
 	TemplateSubmoduleFileName = "template.gitmodules",
+	TemplatePesdeFileName = "pesde-packages.toml",
+	TemplateScriptsFileName = "setup-scripts.toml",
 }
 
 return Config

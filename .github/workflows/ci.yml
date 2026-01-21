@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lune
+        run: |
+          curl -L -o lune.zip \
+            https://github.com/filiptibell/lune/releases/download/v0.10.4/lune-0.10.4-linux-x86_64.zip
+          unzip -q lune.zip -d "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Check syntax
+        run: lune run CheckSyntax
+
+      - name: Run template tests
+        run: lune run tests/RunTemplates

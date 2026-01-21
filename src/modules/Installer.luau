@@ -384,13 +384,17 @@ local function collectTemplateFiles(
 	root: string,
 	templateConfigFileName: string,
 	templateSubmoduleFileName: string,
+	templatePesdeFileName: string,
+	templateScriptsFileName: string,
 	fileSystemUtils
 )
 	local files = fileSystemUtils.CollectFiles(root)
 	local filtered: { any } = {}
 	for _, item in files do
 		if item.RelativePath ~= templateConfigFileName
-			and item.RelativePath ~= templateSubmoduleFileName then
+			and item.RelativePath ~= templateSubmoduleFileName
+			and item.RelativePath ~= templatePesdeFileName
+			and item.RelativePath ~= templateScriptsFileName then
 			table.insert(filtered, item)
 		end
 	end
@@ -514,10 +518,277 @@ local function collectTemplateSubmodules(
 	return true, parseResult
 end
 
+local function collectTemplatePesdePackages(
+	templateRoot: string,
+	templatePesdeFileName: string,
+	tomlParser,
+	fileSystemUtils
+)
+	if templatePesdeFileName == "" then
+		return true, {}
+	end
+
+	local pesdePath = fileSystemUtils.JoinPath(templateRoot, templatePesdeFileName)
+	if not FileSystem.isFile(pesdePath) then
+		return true, {}
+	end
+
+	local okRead, result = tomlParser.ReadFile(pesdePath)
+	if not okRead then
+		if result.Code == "MissingFile" then
+			return true, {}
+		end
+		if result.Code == "ParseError" then
+			return false, {
+				Code = "TemplatePesdeParseFailed",
+				Path = pesdePath,
+				Line = result.Line,
+				LineText = result.LineText,
+			}
+		end
+		return false, {
+			Code = "TemplatePesdeReadFailed",
+			Path = pesdePath,
+			Detail = result.Detail or "",
+		}
+	end
+
+	local packages = result.Packages
+	if packages == nil then
+		return true, {}
+	end
+	if type(packages) ~= "table" then
+		return false, { Code = "InvalidTemplatePesde", Path = pesdePath }
+	end
+
+	local results: { string } = {}
+	for index, entry in packages do
+		if type(entry) ~= "string" or entry == "" then
+			return false, {
+				Code = "InvalidTemplatePesdeEntry",
+				Path = pesdePath,
+				Index = index,
+			}
+		end
+		table.insert(results, entry)
+	end
+
+	return true, results
+end
+
+local function collectTemplateScripts(
+	templateRoot: string,
+	templateScriptsFileName: string,
+	tomlParser,
+	fileSystemUtils
+)
+	if templateScriptsFileName == "" then
+		return true, {}
+	end
+
+	local scriptsPath = fileSystemUtils.JoinPath(templateRoot, templateScriptsFileName)
+	if not FileSystem.isFile(scriptsPath) then
+		return true, {}
+	end
+
+	local okRead, result = tomlParser.ReadFile(scriptsPath)
+	if not okRead then
+		if result.Code == "MissingFile" then
+			return true, {}
+		end
+		if result.Code == "ParseError" then
+			return false, {
+				Code = "TemplateScriptsParseFailed",
+				Path = scriptsPath,
+				Line = result.Line,
+				LineText = result.LineText,
+			}
+		end
+		return false, {
+			Code = "TemplateScriptsReadFailed",
+			Path = scriptsPath,
+			Detail = result.Detail or "",
+		}
+	end
+
+	local scripts = result.Scripts
+	if scripts == nil then
+		return true, {}
+	end
+	if type(scripts) ~= "table" then
+		return false, { Code = "InvalidTemplateScripts", Path = scriptsPath }
+	end
+
+	local results: { [number]: { [string]: any } } = {}
+	for index, entry in scripts do
+		if type(entry) ~= "table" then
+			return false, {
+				Code = "InvalidTemplateScriptEntry",
+				Path = scriptsPath,
+				Index = index,
+			}
+		end
+
+		local scriptType = entry.Type
+		if scriptType == nil or scriptType == "" then
+			if entry.Script ~= nil then
+				scriptType = "Lune"
+			elseif entry.Command ~= nil then
+				scriptType = "Command"
+			end
+		end
+		if type(scriptType) ~= "string" or scriptType == "" then
+			return false, {
+				Code = "MissingTemplateScriptType",
+				Path = scriptsPath,
+				Index = index,
+			}
+		end
+
+		local normalizedType = scriptType:lower()
+		local typeValue = nil
+		if normalizedType == "lune" then
+			typeValue = "Lune"
+		elseif normalizedType == "command" then
+			typeValue = "Command"
+		else
+			return false, {
+				Code = "InvalidTemplateScriptType",
+				Path = scriptsPath,
+				Index = index,
+				Type = scriptType,
+			}
+		end
+
+		local command = entry.Command
+		local scriptPath = entry.Script
+		if typeValue == "Command" then
+			if type(command) ~= "string" or command == "" then
+				return false, {
+					Code = "MissingTemplateScriptCommand",
+					Path = scriptsPath,
+					Index = index,
+				}
+			end
+		elseif typeValue == "Lune" then
+			if type(scriptPath) ~= "string" or scriptPath == "" then
+				return false, {
+					Code = "MissingTemplateScriptPath",
+					Path = scriptsPath,
+					Index = index,
+				}
+			end
+		end
+
+		local args = entry.Args
+		if args == nil then
+			args = {}
+		elseif type(args) ~= "table" then
+			return false, {
+				Code = "InvalidTemplateScriptArgs",
+				Path = scriptsPath,
+				Index = index,
+			}
+		else
+			for argIndex, argValue in args do
+				if type(argValue) ~= "string" or argValue == "" then
+					return false, {
+						Code = "InvalidTemplateScriptArg",
+						Path = scriptsPath,
+						Index = index,
+						ArgIndex = argIndex,
+						ArgValue = argValue,
+					}
+				end
+			end
+		end
+
+		local rootValue = entry.Root
+		if rootValue == nil or rootValue == "" then
+			rootValue = "Project"
+		end
+		if type(rootValue) ~= "string" then
+			return false, {
+				Code = "InvalidTemplateScriptRoot",
+				Path = scriptsPath,
+				Index = index,
+			}
+		end
+
+		local normalizedRoot = rootValue:lower()
+		local rootType = nil
+		if normalizedRoot == "project" then
+			rootType = "Project"
+		elseif normalizedRoot == "template" then
+			rootType = "Template"
+		else
+			return false, {
+				Code = "InvalidTemplateScriptRoot",
+				Path = scriptsPath,
+				Index = index,
+				Root = rootValue,
+			}
+		end
+
+		local orderValue = entry.Order
+		local orderNumber = nil
+		if orderValue ~= nil then
+			if type(orderValue) ~= "string" or orderValue == "" then
+				return false, {
+					Code = "InvalidTemplateScriptOrder",
+					Path = scriptsPath,
+					Index = index,
+				}
+			end
+			orderNumber = tonumber(orderValue)
+			if orderNumber == nil then
+				return false, {
+					Code = "InvalidTemplateScriptOrder",
+					Path = scriptsPath,
+					Index = index,
+				}
+			end
+		end
+
+		local nameValue = entry.Name
+		if nameValue ~= nil and (type(nameValue) ~= "string" or nameValue == "") then
+			return false, {
+				Code = "InvalidTemplateScriptName",
+				Path = scriptsPath,
+				Index = index,
+			}
+		end
+
+		local cwdValue = entry.Cwd
+		if cwdValue ~= nil and (type(cwdValue) ~= "string" or cwdValue == "") then
+			return false, {
+				Code = "InvalidTemplateScriptCwd",
+				Path = scriptsPath,
+				Index = index,
+			}
+		end
+
+		table.insert(results, {
+			Type = typeValue,
+			Command = command,
+			Script = scriptPath,
+			Args = args,
+			Root = rootType,
+			Order = orderNumber,
+			Name = nameValue,
+			Cwd = cwdValue,
+		})
+	end
+
+	return true, results
+end
+
 local function applyTemplate(
 	templateRoot: string,
 	templateConfigFileName: string,
 	templateSubmoduleFileName: string,
+	templatePesdeFileName: string,
+	templateScriptsFileName: string,
 	fileSystemUtils,
 	managedBlock
 )
@@ -525,6 +796,8 @@ local function applyTemplate(
 		templateRoot,
 		templateConfigFileName,
 		templateSubmoduleFileName,
+		templatePesdeFileName,
+		templateScriptsFileName,
 		fileSystemUtils
 	)
 	local appliedCount = 0
@@ -608,10 +881,13 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 	local templateCounts: { [string]: number } = {}
 	local submodules: { [number]: { [string]: string } } = {}
 	local submoduleUrlByPath: { [string]: string } = {}
+	local pesdePackages: { string } = {}
+	local pesdePackageSet: { [string]: boolean } = {}
+	local scripts: { [number]: { [string]: any } } = {}
 	local order = resolvedResult.Order
 	local infos = resolvedResult.Infos
 
-	for _, templateName in order do
+	for orderIndex, templateName in order do
 		local templateInfo = infos[templateName]
 		if templateInfo == nil then
 			return false, { Code = "MissingTemplateInfo", TemplateName = templateName }
@@ -621,6 +897,8 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 			templateInfo.Path,
 			config.TemplateConfigFileName,
 			config.TemplateSubmoduleFileName,
+			config.TemplatePesdeFileName,
+			config.TemplateScriptsFileName,
 			fileSystemUtils,
 			managedBlock
 		)
@@ -655,8 +933,60 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 			end
 		end
 
+		local okPesde, pesdeResult = collectTemplatePesdePackages(
+			templateInfo.Path,
+			config.TemplatePesdeFileName,
+			tomlParser,
+			fileSystemUtils
+		)
+		if not okPesde then
+			return false, pesdeResult
+		end
+
+		for _, packageSpec in pesdeResult do
+			if not pesdePackageSet[packageSpec] then
+				pesdePackageSet[packageSpec] = true
+				table.insert(pesdePackages, packageSpec)
+			end
+		end
+
+		local okScripts, scriptsResult = collectTemplateScripts(
+			templateInfo.Path,
+			config.TemplateScriptsFileName,
+			tomlParser,
+			fileSystemUtils
+		)
+		if not okScripts then
+			return false, scriptsResult
+		end
+
+		for scriptIndex, script in scriptsResult do
+			script.TemplateName = templateName
+			script.TemplateRoot = templateInfo.Path
+			script.TemplateIndex = orderIndex
+			script.ScriptIndex = scriptIndex
+			if script.Order == nil then
+				script.SortOrder = orderIndex * 1000 + scriptIndex
+			else
+				script.SortOrder = script.Order
+			end
+			table.insert(scripts, script)
+		end
+
 		templateCounts[templateName] = countOrErr
 		totalCount += countOrErr
+	end
+
+	if #scripts > 1 then
+		table.sort(scripts, function(a, b)
+			if a.SortOrder ~= b.SortOrder then
+				return a.SortOrder < b.SortOrder
+			end
+			if a.TemplateIndex ~= b.TemplateIndex then
+				return a.TemplateIndex < b.TemplateIndex
+			end
+			return a.ScriptIndex < b.ScriptIndex
+		end)
 	end
 
 	return true, {
@@ -664,6 +994,8 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 		TemplateCounts = templateCounts,
 		TotalCount = totalCount,
 		Submodules = submodules,
+		PesdePackages = pesdePackages,
+		Scripts = scripts,
 	}
 end
 

@@ -319,6 +319,110 @@ local INSTALL_ERROR_HANDLERS = {
 	DuplicateSubmodulePath = function(err)
 		print(`[Error] Duplicate submodule path "{err.Path}" in templates.`)
 	end,
+	TemplatePesdeReadFailed = function(err)
+		local detail = err.Detail or ""
+		print(`[Error] Failed to read template pesde file "{err.Path}": {detail}`)
+	end,
+	TemplatePesdeParseFailed = function(err)
+		local lineLabel = err.Line or "unknown"
+		local lineText = err.LineText
+		local pathLabel = err.Path or "pesde-packages.toml"
+		if lineText ~= nil and lineText ~= "" then
+			print(
+				`[Error] Failed to parse template pesde file "{pathLabel}" at line {lineLabel}: {lineText}`
+			)
+		else
+			print(
+				`[Error] Failed to parse template pesde file "{pathLabel}" at line {lineLabel}.`
+			)
+		end
+	end,
+	InvalidTemplatePesde = function(err)
+		print(`[Error] Invalid template pesde file "{err.Path}".`)
+	end,
+	InvalidTemplatePesdeEntry = function(err)
+		print(
+			`[Error] Invalid template pesde entry at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	TemplateScriptsReadFailed = function(err)
+		local detail = err.Detail or ""
+		print(`[Error] Failed to read setup scripts file "{err.Path}": {detail}`)
+	end,
+	TemplateScriptsParseFailed = function(err)
+		local lineLabel = err.Line or "unknown"
+		local lineText = err.LineText
+		local pathLabel = err.Path or "setup-scripts.toml"
+		if lineText ~= nil and lineText ~= "" then
+			print(
+				`[Error] Failed to parse setup scripts file "{pathLabel}" at line {lineLabel}: {lineText}`
+			)
+		else
+			print(
+				`[Error] Failed to parse setup scripts file "{pathLabel}" at line {lineLabel}.`
+			)
+		end
+	end,
+	InvalidTemplateScripts = function(err)
+		print(`[Error] Invalid setup scripts file "{err.Path}".`)
+	end,
+	InvalidTemplateScriptEntry = function(err)
+		print(
+			`[Error] Invalid setup script entry at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	MissingTemplateScriptType = function(err)
+		print(
+			`[Error] Missing setup script type at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	InvalidTemplateScriptType = function(err)
+		local typeLabel = err.Type or "unknown"
+		print(
+			`[Error] Invalid setup script type "{typeLabel}" at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	MissingTemplateScriptCommand = function(err)
+		print(
+			`[Error] Missing setup script command at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	MissingTemplateScriptPath = function(err)
+		print(
+			`[Error] Missing setup script path at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	InvalidTemplateScriptArgs = function(err)
+		print(
+			`[Error] Invalid setup script args at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	InvalidTemplateScriptArg = function(err)
+		print(
+			`[Error] Invalid setup script arg at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	InvalidTemplateScriptRoot = function(err)
+		local rootLabel = err.Root or "unknown"
+		print(
+			`[Error] Invalid setup script root "{rootLabel}" at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	InvalidTemplateScriptOrder = function(err)
+		print(
+			`[Error] Invalid setup script order at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	InvalidTemplateScriptName = function(err)
+		print(
+			`[Error] Invalid setup script name at index {err.Index} in "{err.Path}".`
+		)
+	end,
+	InvalidTemplateScriptCwd = function(err)
+		print(
+			`[Error] Invalid setup script cwd at index {err.Index} in "{err.Path}".`
+		)
+	end,
 }
 
 local function printInstallError(installError)
@@ -330,6 +434,79 @@ local function printInstallError(installError)
 
 	local codeLabel = installError.Code or "Unknown"
 	print(`[Error] Config install failed ({codeLabel}).`)
+end
+
+local function addPesdePackage(packageSpec: string, configRoot: string): (boolean, string?)
+	local okExec, resultOrErr = pcall(
+		Process.exec,
+		"pesde",
+		{ "add", packageSpec },
+		{ capture = true, cwd = configRoot }
+	)
+	if not okExec then
+		return false, tostring(resultOrErr)
+	end
+
+	local result = resultOrErr
+	if not result.ok then
+		return false, result.stderr or ""
+	end
+
+	return true, nil
+end
+
+local function resolveScriptRoot(script, configRoot, fileSystemUtils): string
+	local rootType = script.Root
+	if rootType == "Template" then
+		local templateRoot = script.TemplateRoot
+		if templateRoot ~= nil and templateRoot ~= "" then
+			return templateRoot
+		end
+	end
+	return configRoot
+end
+
+local function resolveScriptPath(
+	scriptPath: string,
+	rootPath: string,
+	fileSystemUtils
+): string
+	if TemplateRoots.IsAbsolutePath(scriptPath) then
+		return scriptPath
+	end
+	return fileSystemUtils.JoinPath(rootPath, scriptPath)
+end
+
+local function buildScriptCommand(script, configRoot, fileSystemUtils): (string, { string })
+	local rootPath = resolveScriptRoot(script, configRoot, fileSystemUtils)
+	local args: { string } = {}
+	if script.Type == "Lune" then
+		local scriptPath = resolveScriptPath(script.Script, rootPath, fileSystemUtils)
+		table.insert(args, "run")
+		table.insert(args, scriptPath)
+		for _, arg in script.Args do
+			table.insert(args, arg)
+		end
+		return "lune", args
+	end
+
+	local command = script.Command
+	for _, arg in script.Args do
+		table.insert(args, arg)
+	end
+	return command, args
+end
+
+local function resolveScriptCwd(script, configRoot, fileSystemUtils): string
+	local rootPath = resolveScriptRoot(script, configRoot, fileSystemUtils)
+	local cwd = script.Cwd
+	if cwd == nil or cwd == "" then
+		return rootPath
+	end
+	if TemplateRoots.IsAbsolutePath(cwd) then
+		return cwd
+	end
+	return fileSystemUtils.JoinPath(rootPath, cwd)
 end
 
 local okInstall, installResult =
@@ -384,5 +561,53 @@ for _, submodule in submodules do
 		print(`[Submodule] "{submodulePath}" updated`)
 	elseif submoduleResult.Status == "Ok" then
 		print(`[Submodule] "{submodulePath}" is up to date`)
+	end
+end
+
+local pesdePackages = installResult.PesdePackages or {}
+for _, packageSpec in pesdePackages do
+	local okAdd, err = addPesdePackage(packageSpec, configRoot)
+	if not okAdd then
+		print(`[Error] Failed to add pesde package "{packageSpec}": {err}`)
+		Process.exit(1)
+	end
+	print(`[Pesde] "{packageSpec}" added`)
+end
+
+local scripts = installResult.Scripts or {}
+for _, script in scripts do
+	local displayName = script.Name or script.Script or script.Command or "script"
+	local templateLabel = script.TemplateName or "unknown"
+	print(`[Script] Running "{displayName}" for template "{templateLabel}".`)
+
+	local command, args = buildScriptCommand(script, configRoot, FileSystemUtils)
+	local cwd = resolveScriptCwd(script, configRoot, FileSystemUtils)
+	local okExec, resultOrErr = pcall(
+		Process.exec,
+		command,
+		args,
+		{ capture = true, cwd = cwd }
+	)
+	if not okExec then
+		print(`[Error] Script failed to execute "{displayName}": {tostring(resultOrErr)}`)
+		Process.exit(1)
+	end
+
+	local result = resultOrErr
+	if not result.ok then
+		local stderr = result.stderr or ""
+		local stdout = result.stdout or ""
+		print(`[Error] Script failed "{displayName}".`)
+		if stdout ~= "" then
+			print(`[Error] stdout: {stdout}`)
+		end
+		if stderr ~= "" then
+			print(`[Error] stderr: {stderr}`)
+		end
+		Process.exit(1)
+	end
+
+	if result.stdout ~= nil and result.stdout ~= "" then
+		print(result.stdout)
 	end
 end
