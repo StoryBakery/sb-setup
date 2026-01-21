@@ -197,6 +197,7 @@ local TemplateRoots = {
 	ResolvePathFromConfig = resolvePathFromConfig,
 	ResolvePackageTemplatesRoot = resolvePackageTemplatesRoot,
 	ListTemplateNames = listTemplateNames,
+	IsAbsolutePath = isAbsolutePath,
 }
 
 return TemplateRoots

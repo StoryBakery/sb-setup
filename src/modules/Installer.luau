@@ -53,6 +53,80 @@ local function stripQuotes(value: string): string
 	return value
 end
 
+local function normalizePath(path: string): string
+	return path:gsub("\\", "/")
+end
+
+local function normalizeSubmoduleRootPath(value: any): string?
+	if type(value) ~= "string" or value == "" then
+		return nil
+	end
+
+	local normalized = normalizePath(value)
+	normalized = normalized:gsub("/+$", "")
+	if normalized == "" then
+		return nil
+	end
+
+	return normalized
+end
+
+local function resolveSubmoduleRootPath(value: any, configRoot: string): string?
+	local normalized = normalizeSubmoduleRootPath(value)
+	if normalized == nil then
+		return nil
+	end
+
+	if TemplateRoots.IsAbsolutePath(normalized) then
+		local configRootNormalized = normalizePath(configRoot)
+		configRootNormalized = configRootNormalized:gsub("/+$", "")
+		if configRootNormalized == "" then
+			return nil
+		end
+		if normalized:sub(1, #configRootNormalized) == configRootNormalized then
+			local remainder = normalized:sub(#configRootNormalized + 1)
+			remainder = remainder:gsub("^/+", "")
+			if remainder == "" then
+				return nil
+			end
+			return remainder
+		end
+		return nil
+	end
+
+	return normalized
+end
+
+local function applySubmoduleRootPath(path: string, rootPath: string?): string
+	if rootPath == nil or rootPath == "" then
+		return path
+	end
+	if TemplateRoots.IsAbsolutePath(path) then
+		return path
+	end
+
+	local normalizedPath = normalizePath(path)
+	local normalizedRoot = normalizePath(rootPath):gsub("/+$", "")
+	if normalizedRoot == "" then
+		return path
+	end
+
+	if normalizedPath == "libs" then
+		return normalizedRoot
+	end
+
+	local prefix = "libs/"
+	if normalizedPath:sub(1, #prefix) == prefix then
+		local remainder = normalizedPath:sub(#prefix + 1)
+		if normalizedRoot == "." then
+			return remainder
+		end
+		return normalizedRoot .. "/" .. remainder
+	end
+
+	return path
+end
+
 local function readProjectConfig(configPath: string, tomlParser)
 	local okRead, result = tomlParser.ReadFile(configPath)
 	if not okRead then
@@ -112,7 +186,15 @@ local function readProjectConfig(configPath: string, tomlParser)
 		return false, { Code = "InvalidTemplateEntry", Index = 1, Path = configPath }
 	end
 
-	return true, { Templates = templateRefs }
+	local submoduleRootPath = result.SubmoduleRootPath
+	if type(submoduleRootPath) ~= "string" or submoduleRootPath == "" then
+		submoduleRootPath = nil
+	end
+
+	return true, {
+		Templates = templateRefs,
+		SubmoduleRootPath = submoduleRootPath,
+	}
 end
 
 local function loadTemplateConfig(
@@ -486,6 +568,10 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 	end
 
 	local requestedTemplates = projectResult.Templates
+	local submoduleRootPath = resolveSubmoduleRootPath(
+		projectResult.SubmoduleRootPath,
+		configRoot
+	)
 	if requestedTemplates[1].Name ~= config.BaseTemplateName then
 		return false, {
 			Code = "InvalidTemplateOrder",
@@ -552,17 +638,20 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 		end
 
 		for _, submodule in submoduleResult do
-			local existingUrl = submoduleUrlByPath[submodule.Path]
+			local resolvedPath = applySubmoduleRootPath(submodule.Path, submoduleRootPath)
+			local resolvedSubmodule = { Path = resolvedPath, Url = submodule.Url }
+
+			local existingUrl = submoduleUrlByPath[resolvedSubmodule.Path]
 			if existingUrl ~= nil then
-				if existingUrl ~= submodule.Url then
+				if existingUrl ~= resolvedSubmodule.Url then
 					return false, {
 						Code = "DuplicateSubmodulePath",
-						Path = submodule.Path,
+						Path = resolvedSubmodule.Path,
 					}
 				end
 			else
-				submoduleUrlByPath[submodule.Path] = submodule.Url
-				table.insert(submodules, submodule)
+				submoduleUrlByPath[resolvedSubmodule.Path] = resolvedSubmodule.Url
+				table.insert(submodules, resolvedSubmodule)
 			end
 		end
 

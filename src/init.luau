@@ -346,10 +346,12 @@ if #templateNames > 0 then
 end
 print(`[Install] Templates applied: {templateLabel} (files {installResult.TotalCount})`)
 
+local configRoot =
+	TemplateRoots.ResolveConfigRoot(Config.ProjectConfigFileName, FileSystemUtils)
 local submodules = installResult.Submodules or {}
 for _, submodule in submodules do
 	local submodulePath = submodule.Path
-	local submoduleResult = Submodule.Ensure(submodule, FileSystemUtils)
+	local submoduleResult = Submodule.Ensure(submodule, FileSystemUtils, configRoot)
 
 	if not submoduleResult.IsOk then
 		if submoduleResult.Status == "PathConflict" then
