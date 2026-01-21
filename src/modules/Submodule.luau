@@ -225,7 +225,20 @@ local function ensureSubmodule(info, fileSystemUtils, configRoot: string?)
 
 	local repoRoot = resolveGitRoot(rootBase)
 	if repoRoot == nil then
-		return { IsOk = true, Status = "Skipped", Reason = "NotGitRepo" }
+		local okInit, _, initErr = runGit({ "init" }, rootBase)
+		if not okInit then
+			return { IsOk = false, Status = "GitFailed", Action = "InitRepo", Detail = initErr }
+		end
+
+		repoRoot = resolveGitRoot(rootBase)
+		if repoRoot == nil then
+			return {
+				IsOk = false,
+				Status = "GitFailed",
+				Action = "ResolveRepo",
+				Detail = "Failed to resolve Git root.",
+			}
+		end
 	end
 
 	local submodulePath = normalizePath(info.Path)
