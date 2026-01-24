@@ -14,10 +14,13 @@ jobs:
 
       - name: Install Lune
         run: |
+          mkdir -p "$HOME/.local/bin"
           curl -L -o lune.zip \
             https://github.com/filiptibell/lune/releases/download/v0.10.4/lune-0.10.4-linux-x86_64.zip
           unzip -q lune.zip -d "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/lune" || true
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          lune --version
 
       - name: Check syntax
         run: lune run CheckSyntax
