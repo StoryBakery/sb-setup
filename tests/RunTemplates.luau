@@ -134,8 +134,8 @@ local testCases = {
 		Templates = { "base", "roblox-place" },
 	},
 	{
-		Name = "with-docs",
-		Templates = { "base", "with-docs" },
+		Name = "with-bakerywave",
+		Templates = { "base", "with-bakerywave" },
 	},
 	{
 		Name = "with-bakery-dev-handbook",
@@ -146,12 +146,12 @@ local testCases = {
 		Templates = { "base", "pesde-default-packages" },
 	},
 	{
-		Name = "docs-and-handbook",
-		Templates = { "base", "with-docs", "with-bakery-dev-handbook" },
+		Name = "bakerywave-and-handbook",
+		Templates = { "base", "with-bakerywave", "with-bakery-dev-handbook" },
 	},
 	{
-		Name = "docs-and-pesde",
-		Templates = { "base", "with-docs", "pesde-default-packages" },
+		Name = "bakerywave-and-pesde",
+		Templates = { "base", "with-bakerywave", "pesde-default-packages" },
 	},
 	{
 		Name = "all-templates",
@@ -159,7 +159,7 @@ local testCases = {
 			"base",
 			"non-luau",
 			"roblox-place",
-			"with-docs",
+			"with-bakerywave",
 			"with-bakery-dev-handbook",
 			"pesde-default-packages",
 		},

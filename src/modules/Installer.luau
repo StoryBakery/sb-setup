@@ -386,15 +386,19 @@ local function collectTemplateFiles(
 	templateSubmoduleFileName: string,
 	templatePesdeFileName: string,
 	templateScriptsFileName: string,
+	scriptExcludeSet: { [string]: boolean },
 	fileSystemUtils
 )
 	local files = fileSystemUtils.CollectFiles(root)
 	local filtered: { any } = {}
 	for _, item in files do
+		local isScriptAsset = scriptExcludeSet[item.RelativePath] == true
+
 		if item.RelativePath ~= templateConfigFileName
 			and item.RelativePath ~= templateSubmoduleFileName
 			and item.RelativePath ~= templatePesdeFileName
-			and item.RelativePath ~= templateScriptsFileName then
+			and item.RelativePath ~= templateScriptsFileName
+			and not isScriptAsset then
 			table.insert(filtered, item)
 		end
 	end
@@ -789,6 +793,7 @@ local function applyTemplate(
 	templateSubmoduleFileName: string,
 	templatePesdeFileName: string,
 	templateScriptsFileName: string,
+	scriptExcludeSet: { [string]: boolean },
 	fileSystemUtils,
 	managedBlock
 )
@@ -798,6 +803,7 @@ local function applyTemplate(
 		templateSubmoduleFileName,
 		templatePesdeFileName,
 		templateScriptsFileName,
+		scriptExcludeSet,
 		fileSystemUtils
 	)
 	local appliedCount = 0
@@ -893,12 +899,34 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 			return false, { Code = "MissingTemplateInfo", TemplateName = templateName }
 		end
 
+		local okScripts, scriptsResult = collectTemplateScripts(
+			templateInfo.Path,
+			config.TemplateScriptsFileName,
+			tomlParser,
+			fileSystemUtils
+		)
+		if not okScripts then
+			return false, scriptsResult
+		end
+
+		local scriptExcludeSet: { [string]: boolean } = {}
+		for _, script in scriptsResult do
+			if script.Type == "Lune" and script.Root == "Template" then
+				local scriptPath = script.Script
+				if scriptPath ~= nil and not TemplateRoots.IsAbsolutePath(scriptPath) then
+					local normalized = normalizePath(scriptPath):gsub("^%./", "")
+					scriptExcludeSet[normalized] = true
+				end
+			end
+		end
+
 		local okApply, countOrErr = applyTemplate(
 			templateInfo.Path,
 			config.TemplateConfigFileName,
 			config.TemplateSubmoduleFileName,
 			config.TemplatePesdeFileName,
 			config.TemplateScriptsFileName,
+			scriptExcludeSet,
 			fileSystemUtils,
 			managedBlock
 		)
@@ -948,16 +976,6 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 				pesdePackageSet[packageSpec] = true
 				table.insert(pesdePackages, packageSpec)
 			end
-		end
-
-		local okScripts, scriptsResult = collectTemplateScripts(
-			templateInfo.Path,
-			config.TemplateScriptsFileName,
-			tomlParser,
-			fileSystemUtils
-		)
-		if not okScripts then
-			return false, scriptsResult
 		end
 
 		for scriptIndex, script in scriptsResult do
