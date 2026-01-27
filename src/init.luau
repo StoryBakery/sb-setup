@@ -466,6 +466,17 @@ local function resolveScriptRoot(script, configRoot, fileSystemUtils): string
 	return configRoot
 end
 
+local function resolveScriptPathRoot(script, configRoot, fileSystemUtils): string
+	local rootType = script.ScriptRoot
+	if rootType == "Template" then
+		local templateRoot = script.TemplateRoot
+		if templateRoot ~= nil and templateRoot ~= "" then
+			return templateRoot
+		end
+	end
+	return configRoot
+end
+
 local function resolveScriptPath(
 	scriptPath: string,
 	rootPath: string,
@@ -478,10 +489,11 @@ local function resolveScriptPath(
 end
 
 local function buildScriptCommand(script, configRoot, fileSystemUtils): (string, { string })
-	local rootPath = resolveScriptRoot(script, configRoot, fileSystemUtils)
+	local runRoot = resolveScriptRoot(script, configRoot, fileSystemUtils)
 	local args: { string } = {}
 	if script.Type == "Lune" then
-		local scriptPath = resolveScriptPath(script.Script, rootPath, fileSystemUtils)
+		local scriptRoot = resolveScriptPathRoot(script, configRoot, fileSystemUtils)
+		local scriptPath = resolveScriptPath(script.Script, scriptRoot, fileSystemUtils)
 		table.insert(args, "run")
 		table.insert(args, scriptPath)
 		for _, arg in script.Args do
@@ -572,6 +584,27 @@ for _, packageSpec in pesdePackages do
 		Process.exit(1)
 	end
 	print(`[Pesde] "{packageSpec}" added`)
+end
+
+if #pesdePackages > 0 then
+	local okInstall, installResult = pcall(
+		Process.exec,
+		"pesde",
+		{ "install" },
+		{ capture = true, cwd = configRoot }
+	)
+	if not okInstall then
+		print(`[Error] Failed to run pesde install: {tostring(installResult)}`)
+		Process.exit(1)
+	end
+
+	local result = installResult
+	if not result.ok then
+		local stderr = result.stderr or ""
+		print(`[Error] pesde install failed: {stderr}`)
+		Process.exit(1)
+	end
+	print("[Pesde] install completed")
 end
 
 local scripts = installResult.Scripts or {}

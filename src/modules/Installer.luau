@@ -734,6 +734,37 @@ local function collectTemplateScripts(
 			}
 		end
 
+		local scriptRootValue = entry.ScriptRoot
+		if scriptRootValue == nil or scriptRootValue == "" then
+			if typeValue == "Lune" then
+				scriptRootValue = "Template"
+			else
+				scriptRootValue = rootType
+			end
+		end
+		if type(scriptRootValue) ~= "string" then
+			return false, {
+				Code = "InvalidTemplateScriptRoot",
+				Path = scriptsPath,
+				Index = index,
+			}
+		end
+
+		local normalizedScriptRoot = scriptRootValue:lower()
+		local scriptRootType = nil
+		if normalizedScriptRoot == "project" then
+			scriptRootType = "Project"
+		elseif normalizedScriptRoot == "template" then
+			scriptRootType = "Template"
+		else
+			return false, {
+				Code = "InvalidTemplateScriptRoot",
+				Path = scriptsPath,
+				Index = index,
+				Root = scriptRootValue,
+			}
+		end
+
 		local orderValue = entry.Order
 		local orderNumber = nil
 		if orderValue ~= nil then
@@ -778,6 +809,7 @@ local function collectTemplateScripts(
 			Script = scriptPath,
 			Args = args,
 			Root = rootType,
+			ScriptRoot = scriptRootType,
 			Order = orderNumber,
 			Name = nameValue,
 			Cwd = cwdValue,
@@ -911,7 +943,7 @@ local function install(config, fileSystemUtils, tomlParser, managedBlock)
 
 		local scriptExcludeSet: { [string]: boolean } = {}
 		for _, script in scriptsResult do
-			if script.Type == "Lune" and script.Root == "Template" then
+			if script.Type == "Lune" and script.ScriptRoot == "Template" then
 				local scriptPath = script.Script
 				if scriptPath ~= nil and not TemplateRoots.IsAbsolutePath(scriptPath) then
 					local normalized = normalizePath(scriptPath):gsub("^%./", "")
