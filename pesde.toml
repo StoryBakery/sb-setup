@@ -1,5 +1,5 @@
 name = "story_bakery/setup_project_configs"
-version = "0.1.9"
+version = "0.1.10"
 license = "MIT"
 repository = "https://github.com/StoryBakery/setup-project-configs"
 includes = ["pesde.toml", "src/**", "README.md"]
