@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lune
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -L -o lune.zip \
+            https://github.com/filiptibell/lune/releases/download/v0.10.4/lune-0.10.4-linux-x86_64.zip
+          unzip -q lune.zip -d "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/lune" || true
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          lune --version
+
+      - name: Check syntax
+        run: lune run CheckSyntax
+
+      - name: Run template tests
+        run: lune run tests/RunTemplates
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x86_64
+            binary_name: setup-project-configs
+          - target: windows-x86_64
+            binary_name: setup-project-configs.exe
+          - target: macos-x86_64
+            binary_name: setup-project-configs
+          - target: macos-aarch64
+            binary_name: setup-project-configs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lune
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -L -o lune.zip \
+            https://github.com/filiptibell/lune/releases/download/v0.10.4/lune-0.10.4-linux-x86_64.zip
+          unzip -q lune.zip -d "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/lune" || true
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          lune --version
+
+      - name: Generate standalone entry
+        run: lune run scripts/BuildStandalone
+
+      - name: Build standalone binary
+        run: |
+          mkdir -p build
+          lune build build/init.standalone.luau \
+            -t "${{ matrix.target }}" \
+            -o "build/${{ matrix.binary_name }}"
+
+      - name: Package release bundle
+        run: |
+          bundle_dir="dist/setup-project-configs-${{ matrix.target }}"
+          mkdir -p "$bundle_dir"
+          cp "build/${{ matrix.binary_name }}" "$bundle_dir/${{ matrix.binary_name }}"
+          cp -R src/templates "$bundle_dir/templates"
+          cp src/base_setup_project_configs.toml "$bundle_dir/base_setup_project_configs.toml"
+          (
+            cd dist
+            zip -qr "setup-project-configs-${{ matrix.target }}.zip" \
+              "setup-project-configs-${{ matrix.target }}"
+          )
+
+      - name: Upload release asset
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-project-configs-${{ matrix.target }}
+          path: dist/setup-project-configs-${{ matrix.target }}.zip
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download assets
+        if: ${{ !env.ACT }}
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        if: ${{ !env.ACT }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true

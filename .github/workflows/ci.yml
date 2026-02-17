@@ -20,6 +20,7 @@ jobs:
           unzip -q lune.zip -d "$HOME/.local/bin"
           chmod +x "$HOME/.local/bin/lune" || true
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
           lune --version
 
       - name: Check syntax
@@ -27,3 +28,9 @@ jobs:
 
       - name: Run template tests
         run: lune run tests/RunTemplates
+
+      - name: Generate standalone entry
+        run: lune run scripts/BuildStandalone
+
+      - name: Build standalone binary
+        run: lune build build/init.standalone.luau -o build/setup-project-configs
