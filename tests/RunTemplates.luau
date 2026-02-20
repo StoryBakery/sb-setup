@@ -367,6 +367,87 @@ local function runConfigCommandTestCase(
 	return true
 end
 
+local function runStandaloneTemplateDiscoveryTest(
+	repoRoot: string,
+	tmpRoot: string,
+	fileSystemUtils
+): boolean
+	local buildScriptPath = fileSystemUtils.JoinPath(repoRoot, "scripts/BuildStandalone.luau")
+	local standaloneEntryPath = fileSystemUtils.JoinPath(repoRoot, "build/init.standalone.luau")
+	local runId = tostring(os.time()) .. "-standalone"
+	local caseRoot = fileSystemUtils.JoinPath(tmpRoot, "standalone-" .. runId)
+	fileSystemUtils.MakeDirectoryRecursive(caseRoot)
+
+	print("[Test] Running standalone template discovery test.")
+
+	local okBuildExec, buildResultOrErr =
+		pcall(Process.exec, "lune", { "run", buildScriptPath }, { capture = true, cwd = repoRoot })
+	if not okBuildExec then
+		print(`[Test] Failed to run BuildStandalone: {tostring(buildResultOrErr)}`)
+		return false
+	end
+
+	local buildResult = buildResultOrErr
+	if not buildResult.ok then
+		local stdout = buildResult.stdout or ""
+		local stderr = buildResult.stderr or ""
+		print("[Test] BuildStandalone command failed.")
+		if stdout ~= "" then
+			print(`[Test] stdout: {stdout}`)
+		end
+		if stderr ~= "" then
+			print(`[Test] stderr: {stderr}`)
+		end
+		return false
+	end
+
+	local okListExec, listResultOrErr = pcall(
+		Process.exec,
+		"lune",
+		{ "run", standaloneEntryPath, "list" },
+		{ capture = true, cwd = caseRoot }
+	)
+	if not okListExec then
+		print(`[Test] Failed to run standalone list command: {tostring(listResultOrErr)}`)
+		return false
+	end
+
+	local listResult = listResultOrErr
+	if not listResult.ok then
+		local stdout = listResult.stdout or ""
+		local stderr = listResult.stderr or ""
+		print("[Test] Standalone list command failed.")
+		if stdout ~= "" then
+			print(`[Test] stdout: {stdout}`)
+		end
+		if stderr ~= "" then
+			print(`[Test] stderr: {stderr}`)
+		end
+		return false
+	end
+
+	local output = (listResult.stdout or "") .. "\n" .. (listResult.stderr or "")
+	local availableCountText = output:match("%[Template%] Available templates:%s*(%d+)")
+	if availableCountText == nil then
+		print("[Test] Failed to read template count from standalone list output.")
+		print(`[Test] output: {output}`)
+		return false
+	end
+
+	local availableCount = tonumber(availableCountText)
+	if availableCount == nil or availableCount <= 0 then
+		print(`[Test] Standalone list returned invalid template count: {availableCountText}`)
+		return false
+	end
+
+	local okCleanup = removeDirectoryRecursive(caseRoot, fileSystemUtils)
+	if not okCleanup then
+		return false
+	end
+
+	return true
+end
+
 local repoRoot = resolveRepoRoot(FileSystemUtils)
 local testsRoot = FileSystemUtils.JoinPath(repoRoot, "tests")
 local tmpRoot = FileSystemUtils.JoinPath(testsRoot, ".tmp")
@@ -444,6 +525,11 @@ local testCases = {
 }
 
 local failed = 0
+local okStandalone = runStandaloneTemplateDiscoveryTest(repoRoot, tmpRoot, FileSystemUtils)
+if not okStandalone then
+	failed += 1
+end
+
 for index, case in testCases do
 	local ok = runTestCase(
 		case.Name,

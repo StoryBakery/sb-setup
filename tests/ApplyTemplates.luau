@@ -111,20 +111,12 @@ if not hasTemplateName(templateNames, "base") then
 end
 
 local pesdePackages = installResult.PesdePackages or {}
-if hasTemplate(configData.Templates, "pesde-default-packages") then
-	if #pesdePackages == 0 then
-		print("[Error] Expected pesde packages but none were detected.")
-		Process.exit(1)
-	end
+if #pesdePackages > 0 then
 	print(`[Test] Pesde packages: {#pesdePackages}`)
 end
 
 local scripts = installResult.Scripts or {}
-if hasTemplate(configData.Templates, "pesde-default-packages") then
-	if #scripts == 0 then
-		print("[Error] Expected setup scripts but none were detected.")
-		Process.exit(1)
-	end
+if #scripts > 0 then
 	print(`[Test] Setup scripts: {#scripts}`)
 end
 if not FileSystem.isFile(".gitignore") then

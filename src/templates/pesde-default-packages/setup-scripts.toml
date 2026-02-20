@@ -1,6 +1,0 @@
-[[Scripts]]
-Name = "pesde-gitrev"
-Type = "Lune"
-Script = "scripts/run_pesde_gitrev.luau"
-Root = "Project"
-ScriptRoot = "Template"

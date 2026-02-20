@@ -4,6 +4,8 @@
 
 local FileSystem = require("@lune/fs")
 
+local runtimeTemplatesRoot = nil
+
 local function normalizeSourcePath(source: string): string
 	local normalized = source
 	if normalized:sub(1, 1) == "@" then
@@ -123,6 +125,12 @@ local function resolvePackageTemplatesRoot(
 	configRoot: string,
 	fileSystemUtils
 ): string?
+	if runtimeTemplatesRoot ~= nil and runtimeTemplatesRoot ~= "" then
+		if FileSystem.isDir(runtimeTemplatesRoot) then
+			return runtimeTemplatesRoot
+		end
+	end
+
 	local source = debug.info(1, "s")
 	if source ~= nil and source ~= "" then
 		local scriptPath = normalizeSourcePath(source)
@@ -166,6 +174,15 @@ local function resolvePackageTemplatesRoot(
 	return nil
 end
 
+local function setRuntimeTemplatesRoot(path: string?)
+	if type(path) ~= "string" or path == "" then
+		runtimeTemplatesRoot = nil
+		return
+	end
+
+	runtimeTemplatesRoot = path
+end
+
 local function listTemplateNames(templateRoots: { string }, fileSystemUtils): { string }
 	local templateNameSet: { [string]: boolean } = {}
 	for _, templatesRoot in templateRoots do
@@ -196,6 +213,7 @@ local TemplateRoots = {
 	ResolveProjectTemplatesRoot = resolveProjectTemplatesRoot,
 	ResolvePathFromConfig = resolvePathFromConfig,
 	ResolvePackageTemplatesRoot = resolvePackageTemplatesRoot,
+	SetRuntimeTemplatesRoot = setRuntimeTemplatesRoot,
 	ListTemplateNames = listTemplateNames,
 	IsAbsolutePath = isAbsolutePath,
 }
