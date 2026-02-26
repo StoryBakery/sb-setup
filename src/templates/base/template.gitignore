@@ -1,26 +1,6 @@
 # BEGIN managed-by: sb-setup id: sb.gitignore.base
 # Story Bakery default ignores
 
-# Rojo
-/sourcemap.json
-
-# Roblox
-**/*.rbxl.lock
-**/*.rbxlx.lock
-**/*.rbxm.lock
-**/*.rbxmx.lock
-
-# Pesde
-.pesde/
-luau_packages/
-lune_packages/
-roblox_packages/
-
-# Wally
-/Packages
-/ServerPackages
-/DevPackages
-
 # Git
 
 # Misc

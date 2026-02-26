@@ -183,7 +183,16 @@ local function setRuntimeTemplatesRoot(path: string?)
 	runtimeTemplatesRoot = path
 end
 
-local function listTemplateNames(templateRoots: { string }, fileSystemUtils): { string }
+local function listTemplateNames(
+	templateRoots: { string },
+	fileSystemUtils,
+	templateConfigFileName: string?
+): { string }
+	local configFileName = templateConfigFileName
+	if configFileName == nil or configFileName == "" then
+		configFileName = "template.toml"
+	end
+
 	local templateNameSet: { [string]: boolean } = {}
 	for _, templatesRoot in templateRoots do
 		if templatesRoot ~= "" and FileSystem.isDir(templatesRoot) then
@@ -191,7 +200,8 @@ local function listTemplateNames(templateRoots: { string }, fileSystemUtils): { 
 			if ok and entries ~= nil then
 				for _, entry in entries do
 					local path = fileSystemUtils.JoinPath(templatesRoot, entry)
-					if FileSystem.isDir(path) then
+					local configPath = fileSystemUtils.JoinPath(path, configFileName)
+					if FileSystem.isDir(path) and FileSystem.isFile(configPath) then
 						templateNameSet[entry] = true
 					end
 				end

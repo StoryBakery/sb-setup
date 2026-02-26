@@ -171,7 +171,7 @@ local function collectTemplateOptions(config, fileSystemUtils): { string }
 		table.insert(roots, projectTemplatesRoot)
 	end
 
-	return TemplateRoots.ListTemplateNames(roots, fileSystemUtils)
+	return TemplateRoots.ListTemplateNames(roots, fileSystemUtils, config.TemplateConfigFileName)
 end
 
 local function filterOptionalTemplates(

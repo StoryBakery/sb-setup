@@ -1,0 +1,24 @@
+# BEGIN managed-by: sb-setup id: sb.gitignore.luau
+# Luau and Roblox default ignores
+
+# Rojo
+/sourcemap.json
+
+# Roblox
+**/*.rbxl.lock
+**/*.rbxlx.lock
+**/*.rbxm.lock
+**/*.rbxmx.lock
+
+# Pesde
+.pesde/
+luau_packages/
+lune_packages/
+roblox_packages/
+
+# Wally
+/Packages
+/ServerPackages
+/DevPackages
+
+# END managed-by: sb-setup id: sb.gitignore.luau

@@ -318,7 +318,11 @@ local function loadTemplateConfig(
 		if packageTemplatesRoot ~= nil then
 			table.insert(roots, packageTemplatesRoot)
 		end
-		local availableTemplates = TemplateRoots.ListTemplateNames(roots, fileSystemUtils)
+		local availableTemplates = TemplateRoots.ListTemplateNames(
+			roots,
+			fileSystemUtils,
+			templateConfigFileName
+		)
 		return false, {
 			Code = "MissingTemplate",
 			TemplateName = templateName,
@@ -1322,7 +1326,11 @@ local function listTemplates(config, fileSystemUtils, tomlParser)
 		table.insert(roots, packageTemplatesRoot)
 	end
 
-	local names = TemplateRoots.ListTemplateNames(roots, fileSystemUtils)
+	local names = TemplateRoots.ListTemplateNames(
+		roots,
+		fileSystemUtils,
+		config.TemplateConfigFileName
+	)
 	local templates: { [number]: { [string]: any } } = {}
 
 	for _, name in names do
