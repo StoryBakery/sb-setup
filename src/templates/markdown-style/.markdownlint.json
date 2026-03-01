@@ -46,12 +46,7 @@
     },
     "MD031": true,
     "MD032": true,
-    "MD033": {
-        "allowed_elements": [
-            "img",
-            "video"
-        ]
-    },
+    "MD033": false,
     "MD034": true,
     "MD035": {
         "style": "---"
