@@ -16,7 +16,6 @@
 tmp
 .tmp
 tmp.**
-
 # Luau and Roblox default ignores
 
 # Rojo
@@ -38,5 +37,4 @@ roblox_packages/
 /Packages
 /ServerPackages
 /DevPackages
-
 # END sb-setup:sb.gitignore
