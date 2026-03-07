@@ -1,0 +1,3 @@
+Name = "luau-docgen"
+Description = "Luau docgen style template."
+Parent = "luau"

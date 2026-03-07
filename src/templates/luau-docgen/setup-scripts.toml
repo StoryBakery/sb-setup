@@ -1,0 +1,6 @@
+[[Scripts]]
+Name = "sync-bakerywave-luau-docgen-docs"
+Type = "Lune"
+Script = "scripts/sync_bakerywave_docs.luau"
+Root = "Project"
+ScriptRoot = "Template"

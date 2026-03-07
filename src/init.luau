@@ -187,6 +187,97 @@ local function filterOptionalTemplates(
 	return optionalTemplates
 end
 
+local function collectAvailableTemplateInfoByName(
+	config,
+	fileSystemUtils
+): { [string]: { [string]: any } }
+	local okList, listResult = Installer.ListTemplates(config, fileSystemUtils, TomlParser)
+	if not okList or type(listResult) ~= "table" then
+		return {}
+	end
+
+	local templates = listResult.Templates
+	if type(templates) ~= "table" then
+		return {}
+	end
+
+	local templateInfoByName: { [string]: { [string]: any } } = {}
+	for _, templateInfo in templates do
+		if type(templateInfo) == "table" then
+			local name = templateInfo.Name
+			if type(name) == "string" and name ~= "" and templateInfoByName[name] == nil then
+				templateInfoByName[name] = templateInfo
+			end
+		end
+	end
+
+	return templateInfoByName
+end
+
+local function buildOptionalTemplateDisplayData(
+	optionalTemplates: { string },
+	templateInfoByName: { [string]: { [string]: any } }
+): ({ string }, { [string]: number }, { [string]: string })
+	local optionalTemplateNameSet: { [string]: boolean } = {}
+	for _, name in optionalTemplates do
+		optionalTemplateNameSet[name] = true
+	end
+
+	local parentByName: { [string]: string } = {}
+	local childrenByName: { [string]: { string } } = {}
+
+	for _, name in optionalTemplates do
+		local templateInfo = templateInfoByName[name]
+		if type(templateInfo) == "table" then
+			local parentName = templateInfo.Parent
+			if type(parentName) == "string" and parentName ~= "" then
+				if parentName ~= name and optionalTemplateNameSet[parentName] then
+					parentByName[name] = parentName
+					if childrenByName[parentName] == nil then
+						childrenByName[parentName] = {}
+					end
+					table.insert(childrenByName[parentName], name)
+				end
+			end
+		end
+	end
+
+	local orderedOptionalTemplates: { string } = {}
+	local depthByName: { [string]: number } = {}
+	local emittedNameSet: { [string]: boolean } = {}
+
+	local function appendTemplate(name: string, depth: number)
+		if emittedNameSet[name] then
+			return
+		end
+
+		emittedNameSet[name] = true
+		depthByName[name] = depth
+		table.insert(orderedOptionalTemplates, name)
+
+		local children = childrenByName[name]
+		if type(children) == "table" then
+			for _, childName in children do
+				appendTemplate(childName, depth + 1)
+			end
+		end
+	end
+
+	for _, name in optionalTemplates do
+		if parentByName[name] == nil then
+			appendTemplate(name, 0)
+		end
+	end
+
+	for _, name in optionalTemplates do
+		if not emittedNameSet[name] then
+			appendTemplate(name, 0)
+		end
+	end
+
+	return orderedOptionalTemplates, depthByName, parentByName
+end
+
 local function buildSelectedOptionalTemplates(
 	optionalTemplates: { string },
 	selectedNameSet: { [string]: boolean }
@@ -244,9 +335,40 @@ local function buildSelectedOptionalNameSet(
 	return selectedNameSet
 end
 
+local function updateOptionalTemplateSelection(
+	name: string,
+	selectedNameSet: { [string]: boolean },
+	parentByName: { [string]: string }?
+)
+	local currentlySelected = selectedNameSet[name] == true
+	if currentlySelected then
+		selectedNameSet[name] = false
+		return
+	end
+
+	selectedNameSet[name] = true
+
+	if parentByName == nil then
+		return
+	end
+
+	local currentName = name
+	while true do
+		local parentName = parentByName[currentName]
+		if type(parentName) ~= "string" or parentName == "" then
+			break
+		end
+
+		selectedNameSet[parentName] = true
+		currentName = parentName
+	end
+end
+
 local function selectOptionalTemplatesFromLineInput(
 	optionalTemplates: { string },
-	currentTemplateNameSet: { [string]: boolean }?
+	currentTemplateNameSet: { [string]: boolean }?,
+	depthByName: { [string]: number }?,
+	parentByName: { [string]: string }?
 ): (boolean, { string }?)
 	local selectedNameSet = buildSelectedOptionalNameSet(optionalTemplates, currentTemplateNameSet)
 
@@ -255,7 +377,15 @@ local function selectOptionalTemplatesFromLineInput(
 		print("[Config] Templates:")
 		for index, name in optionalTemplates do
 			local statusLabel = if selectedNameSet[name] then "x" else " "
-			print(`[Config] {index}) [{statusLabel}] {name}`)
+			local depth = 0
+			if depthByName ~= nil then
+				local resolvedDepth = depthByName[name]
+				if type(resolvedDepth) == "number" then
+					depth = resolvedDepth
+				end
+			end
+			local indent = string.rep("  ", depth)
+			print(`[Config] {index}) {indent}[{statusLabel}] {name}`)
 		end
 		print('[Config] Enter numbers to toggle, "save" to apply, or "cancel" to cancel:')
 
@@ -278,7 +408,7 @@ local function selectOptionalTemplatesFromLineInput(
 			if index ~= nil then
 				local name = optionalTemplates[index]
 				if name ~= nil then
-					selectedNameSet[name] = not selectedNameSet[name]
+					updateOptionalTemplateSelection(name, selectedNameSet, parentByName)
 				end
 			end
 		end
@@ -287,7 +417,9 @@ end
 
 local function selectOptionalTemplatesWithSelectPrompt(
 	optionalTemplates: { string },
-	selectedNameSet: { [string]: boolean }
+	selectedNameSet: { [string]: boolean },
+	depthByName: { [string]: number }?,
+	parentByName: { [string]: string }?
 ): (boolean, { string }?, string?)
 	local lastIndex = 1
 
@@ -295,7 +427,15 @@ local function selectOptionalTemplatesWithSelectPrompt(
 		local choices: { string } = {}
 		for _, name in optionalTemplates do
 			local statusLabel = if selectedNameSet[name] then "[x]" else "[ ]"
-			table.insert(choices, `{statusLabel} {name}`)
+			local depth = 0
+			if depthByName ~= nil then
+				local resolvedDepth = depthByName[name]
+				if type(resolvedDepth) == "number" then
+					depth = resolvedDepth
+				end
+			end
+			local indent = string.rep("  ", depth)
+			table.insert(choices, `{indent}{statusLabel} {name}`)
 		end
 		table.insert(choices, "[Save]")
 		table.insert(choices, "[Cancel]")
@@ -346,29 +486,43 @@ local function selectOptionalTemplatesWithSelectPrompt(
 
 		local name = optionalTemplates[index]
 		if name ~= nil then
-			selectedNameSet[name] = not selectedNameSet[name]
+			updateOptionalTemplateSelection(name, selectedNameSet, parentByName)
 		end
 	end
 end
 
 local function selectOptionalTemplatesWithPrompt(
 	optionalTemplates: { string },
-	currentTemplateNameSet: { [string]: boolean }?
+	currentTemplateNameSet: { [string]: boolean }?,
+	depthByName: { [string]: number }?,
+	parentByName: { [string]: string }?
 ): (boolean, { string }?, string?)
 	local selectedNameSet = buildSelectedOptionalNameSet(optionalTemplates, currentTemplateNameSet)
-	return selectOptionalTemplatesWithSelectPrompt(optionalTemplates, selectedNameSet)
+	return selectOptionalTemplatesWithSelectPrompt(
+		optionalTemplates,
+		selectedNameSet,
+		depthByName,
+		parentByName
+	)
 end
 
 local function selectOptionalTemplates(
 	optionalTemplates: { string },
-	currentTemplateNameSet: { [string]: boolean }?
+	currentTemplateNameSet: { [string]: boolean }?,
+	depthByName: { [string]: number }?,
+	parentByName: { [string]: string }?
 ): (boolean, { string }?)
 	if #optionalTemplates == 0 then
 		return true, {}
 	end
 
 	local okPrompt, selectedTemplates, reason =
-		selectOptionalTemplatesWithPrompt(optionalTemplates, currentTemplateNameSet)
+		selectOptionalTemplatesWithPrompt(
+			optionalTemplates,
+			currentTemplateNameSet,
+			depthByName,
+			parentByName
+		)
 	if okPrompt and selectedTemplates ~= nil then
 		return true, selectedTemplates
 	end
@@ -376,7 +530,12 @@ local function selectOptionalTemplates(
 		return false, nil
 	end
 
-	return selectOptionalTemplatesFromLineInput(optionalTemplates, currentTemplateNameSet)
+	return selectOptionalTemplatesFromLineInput(
+		optionalTemplates,
+		currentTemplateNameSet,
+		depthByName,
+		parentByName
+	)
 end
 
 local function mergeOptionalTemplates(
@@ -553,7 +712,11 @@ local function initProjectConfig(config, fileSystemUtils, forceInit: boolean)
 
 	local templateNames = collectTemplateOptions(config, fileSystemUtils)
 	local optionalTemplates = filterOptionalTemplates(templateNames, config.BaseTemplateName)
-	local okSelect, selectedTemplates = selectOptionalTemplates(optionalTemplates)
+	local templateInfoByName = collectAvailableTemplateInfoByName(config, fileSystemUtils)
+	local orderedOptionalTemplates, depthByName, parentByName =
+		buildOptionalTemplateDisplayData(optionalTemplates, templateInfoByName)
+	local okSelect, selectedTemplates =
+		selectOptionalTemplates(orderedOptionalTemplates, nil, depthByName, parentByName)
 	if not okSelect or selectedTemplates == nil then
 		return false, { Code = "SelectionCancelled" }
 	end
@@ -643,8 +806,16 @@ local function configureProjectConfig(config, fileSystemUtils)
 		extractConfiguredTemplateData(projectConfigPath, config.BaseTemplateName)
 	local optionalTemplates =
 		mergeOptionalTemplates(availableOptionalTemplates, configuredOptionalTemplatesInOrder)
+	local templateInfoByName = collectAvailableTemplateInfoByName(config, fileSystemUtils)
+	local orderedOptionalTemplates, depthByName, parentByName =
+		buildOptionalTemplateDisplayData(optionalTemplates, templateInfoByName)
 	local okSelect, selectedTemplates =
-		selectOptionalTemplates(optionalTemplates, configuredTemplateNameSet)
+		selectOptionalTemplates(
+			orderedOptionalTemplates,
+			configuredTemplateNameSet,
+			depthByName,
+			parentByName
+		)
 	if not okSelect or selectedTemplates == nil then
 		return false, { Code = "SelectionCancelled" }
 	end
@@ -1062,10 +1233,9 @@ local function printTemplateList(listResult)
 			description = "No description."
 		end
 
-		local extends = templateInfo.Extends
-		local extendsLabel = "none"
-		if type(extends) == "table" and #extends > 0 then
-			extendsLabel = table.concat(extends, ", ")
+		local parentLabel = "none"
+		if type(templateInfo.Parent) == "string" and templateInfo.Parent ~= "" then
+			parentLabel = templateInfo.Parent
 		end
 
 		local sourceLabel = templateInfo.Source or "unknown"
@@ -1073,7 +1243,7 @@ local function printTemplateList(listResult)
 
 		print(`[Template] {templateName}`)
 		print(`  Description: {description}`)
-		print(`  Extends: {extendsLabel}`)
+		print(`  Parent: {parentLabel}`)
 		print(`  Source: {sourceLabel}`)
 		print(`  Path: {pathLabel}`)
 	end

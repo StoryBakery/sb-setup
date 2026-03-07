@@ -335,7 +335,6 @@ local function ensureTemplateSourcesForConfigCase(
 				local templateConfigContent = table.concat({
 					`Name = "{escapeTomlString(name)}"`,
 					'Description = "Config command test template."',
-					'Extends = ["base"]',
 					"",
 				}, "\n")
 
@@ -652,6 +651,82 @@ local function listOptionalTemplatesInRepo(
 	return optionalTemplates
 end
 
+local function buildConfigOptionalTemplateOrder(
+	repoRoot: string,
+	optionalTemplates: { string },
+	fileSystemUtils,
+	tomlParser
+): { string }
+	local optionalTemplateNameSet: { [string]: boolean } = {}
+	for _, name in optionalTemplates do
+		optionalTemplateNameSet[name] = true
+	end
+
+	local parentByName: { [string]: string } = {}
+	local childrenByName: { [string]: { string } } = {}
+
+	for _, name in optionalTemplates do
+		local templateConfigPath =
+			fileSystemUtils.JoinPath(repoRoot, `src/templates/{name}/template.toml`)
+		local okRead, templateConfigOrErr = tomlParser.ReadFile(templateConfigPath)
+		if okRead and type(templateConfigOrErr) == "table" then
+			local parentName = templateConfigOrErr.Parent
+			if type(parentName) == "string" and parentName ~= "" then
+				if parentName ~= name and optionalTemplateNameSet[parentName] then
+					parentByName[name] = parentName
+					if childrenByName[parentName] == nil then
+						childrenByName[parentName] = {}
+					end
+					table.insert(childrenByName[parentName], name)
+				end
+			end
+		end
+	end
+
+	local orderedOptionalTemplates: { string } = {}
+	local emittedNameSet: { [string]: boolean } = {}
+
+	local function appendTemplate(name: string)
+		if emittedNameSet[name] then
+			return
+		end
+
+		emittedNameSet[name] = true
+		table.insert(orderedOptionalTemplates, name)
+
+		local children = childrenByName[name]
+		if type(children) == "table" then
+			for _, childName in children do
+				appendTemplate(childName)
+			end
+		end
+	end
+
+	for _, name in optionalTemplates do
+		if parentByName[name] == nil then
+			appendTemplate(name)
+		end
+	end
+
+	for _, name in optionalTemplates do
+		if not emittedNameSet[name] then
+			appendTemplate(name)
+		end
+	end
+
+	return orderedOptionalTemplates
+end
+
+local function findTemplateIndex(templateNames: { string }, targetName: string): number?
+	for index, templateName in templateNames do
+		if templateName == targetName then
+			return index
+		end
+	end
+
+	return nil
+end
+
 local repoRoot = resolveRepoRoot(FileSystemUtils)
 local testsRoot = FileSystemUtils.JoinPath(repoRoot, "tests")
 local tmpRoot = FileSystemUtils.JoinPath(testsRoot, ".tmp")
@@ -676,6 +751,12 @@ if not FileSystem.isFile(initScriptPath) then
 end
 
 local optionalTemplatesInRepo = listOptionalTemplatesInRepo(repoRoot, FileSystemUtils)
+local configOptionalTemplatesInRepo = buildConfigOptionalTemplateOrder(
+	repoRoot,
+	optionalTemplatesInRepo,
+	FileSystemUtils,
+	TomlParser
+)
 
 local testCases = {
 	{
@@ -739,7 +820,7 @@ end
 
 local configCommandTestCases = {}
 
-local firstOptionalTemplate = optionalTemplatesInRepo[1]
+local firstOptionalTemplate = configOptionalTemplatesInRepo[1]
 if firstOptionalTemplate ~= nil then
 	table.insert(configCommandTestCases, {
 		Name = "config-toggle-first-optional-template",
@@ -772,6 +853,30 @@ if firstOptionalTemplate ~= nil then
 	})
 end
 
+local bakerywaveIndex = findTemplateIndex(configOptionalTemplatesInRepo, "bakerywave")
+local bakerywaveParentIndex = findTemplateIndex(configOptionalTemplatesInRepo, "markdown-style")
+if bakerywaveIndex ~= nil and bakerywaveParentIndex ~= nil then
+	table.insert(configCommandTestCases, {
+		Name = "config-toggle-child-enables-parent",
+		InitialTemplates = {},
+		Input = tostring(bakerywaveIndex) .. "\nsave\n",
+		ExpectedTemplates = { "markdown-style", "bakerywave" },
+		ExpectedSourceByTemplateName = nil,
+		ShouldRunInstall = true,
+		UseNoInstallOption = nil,
+	})
+
+	table.insert(configCommandTestCases, {
+		Name = "config-toggle-child-then-disable-parent",
+		InitialTemplates = {},
+		Input = tostring(bakerywaveIndex) .. "\n" .. tostring(bakerywaveParentIndex) .. "\nsave\n",
+		ExpectedTemplates = { "bakerywave" },
+		ExpectedSourceByTemplateName = nil,
+		ShouldRunInstall = true,
+		UseNoInstallOption = nil,
+	})
+end
+
 local customTemplateName = "custom-template"
 local customTemplateSource = "./templates/custom-template"
 local initialTemplatesWithCustom = { { Name = customTemplateName, Source = customTemplateSource } }
@@ -801,7 +906,7 @@ if firstOptionalTemplate ~= nil then
 	table.insert(expectedTemplatesWithoutCustom, firstOptionalTemplate)
 end
 
-local customTemplateToggleIndex = #optionalTemplatesInRepo + 1
+local customTemplateToggleIndex = #configOptionalTemplatesInRepo + 1
 table.insert(configCommandTestCases, {
 	Name = "config-toggle-custom-template-off",
 	InitialTemplates = initialTemplatesWithCustom,

@@ -1,0 +1,3 @@
+Name = "bakerywave"
+Description = "Bakerywave extension template."
+Parent = "markdown-style"

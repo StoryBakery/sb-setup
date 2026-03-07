@@ -365,9 +365,9 @@ local function loadTemplateConfig(
 		}
 	end
 
-	local extends = result.Extends
-	if type(extends) ~= "table" then
-		extends = {}
+	local parent = result.Parent
+	if type(parent) ~= "string" or parent == "" then
+		parent = nil
 	end
 
 	local description = result.Description
@@ -377,7 +377,7 @@ local function loadTemplateConfig(
 
 	return true, {
 		Name = name,
-		Extends = extends,
+		Parent = parent,
 		Description = description,
 		Path = templateRoot,
 	}
@@ -430,31 +430,16 @@ local function resolveTemplates(
 		return true, result
 	end
 
-	local function addTemplate(name: string)
-		if visited[name] then
-			return true, nil
-		end
-		local ok, templateInfo = loadTemplate(name)
-		if not ok then
-			return false, templateInfo
-		end
-		visited[name] = true
-
-		for _, parentName in templateInfo.Extends do
-			local okAdd, err = addTemplate(parentName)
-			if not okAdd then
-				return false, err
-			end
-		end
-
-		table.insert(resolved, name)
-		return true, nil
-	end
-
 	for _, ref in requestedTemplates do
-		local okAdd, err = addTemplate(ref.Name)
-		if not okAdd then
-			return false, err
+		local name = ref.Name
+		if not visited[name] then
+			local okLoad, loadResult = loadTemplate(name)
+			if not okLoad then
+				return false, loadResult
+			end
+
+			visited[name] = true
+			table.insert(resolved, name)
 		end
 	end
 
@@ -1356,7 +1341,7 @@ local function listTemplates(config, fileSystemUtils, tomlParser)
 		table.insert(templates, {
 			Name = templateInfo.Name,
 			Description = templateInfo.Description,
-			Extends = templateInfo.Extends,
+			Parent = templateInfo.Parent,
 			Path = templateInfo.Path,
 			Source = sourceLabel,
 		})
